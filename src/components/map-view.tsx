@@ -15,7 +15,9 @@ import { useSession } from "@/lib/auth/session";
 import { ONLINE_STYLE, offlineStyle } from "@/lib/map-style";
 import { kaartBestand } from "@/lib/offline-map";
 import type { Place } from "@/lib/geocode";
-import { useActiveDayPlaces, useTripStore } from "@/lib/store";
+import { useActiveDayPlaces, useActiveDayStay, useTripStore } from "@/lib/store";
+import { MapPinIcon } from "./map-pin-icon";
+import { PlaceSearch } from "./place-search";
 
 /** Naam bij coördinaten. Reageert de dienst niet, dan mag de gebruiker zelf. */
 async function plaatsnaam(lat: number, lng: number): Promise<string> {
@@ -32,7 +34,8 @@ async function plaatsnaam(lat: number, lng: number): Promise<string> {
   return "Nieuwe plek";
 }
 
-/** Beeld bij een dag zonder locaties: West-Europa. */
+/** Beginbeeld bij het openen van de kaart: West-Europa. Daarna stuurt de
+ * gebruiker zelf; de kaart springt nooit uit zichzelf naar een dag. */
 const FALLBACK_VIEW = { longitude: 6.5, latitude: 48.5, zoom: 4 };
 
 /**
@@ -59,16 +62,20 @@ function useMapStyle(): StyleSpecification | string {
 
 export function MapView() {
   const mapRef = useRef<MapRef>(null);
-  const [loaded, setLoaded] = useState(false);
   const mapStyle = useMapStyle();
+  // Het gekozen zoekresultaat. Blijft staan tot je iets anders zoekt of hem
+  // wegklikt, zodat je erop kunt richten met "+ Favoriet".
+  const [zoekPunt, setZoekPunt] = useState<Place | null>(null);
   const places = useActiveDayPlaces();
+  const stay = useActiveDayStay();
   const hoveredActivityId = useTripStore((state) => state.hoveredActivityId);
   const setHoveredActivity = useTripStore((state) => state.setHoveredActivity);
   const route = useTripStore((state) => state.route);
   const mapPick = useTripStore((state) => state.mapPick);
   const setMapPick = useTripStore((state) => state.setMapPick);
-  const setDraftLocation = useTripStore((state) => state.setDraftLocation);
   const saveActivity = useTripStore((state) => state.saveActivity);
+  const saveFavorite = useTripStore((state) => state.saveFavorite);
+  const tripId = useTripStore((state) => state.data?.trip.id);
   const moveActivity = useTripStore((state) => state.moveActivity);
   const activities = useTripStore((state) => state.data?.activities);
   const selectedActivityId = useTripStore((state) => state.selectedActivityId);
@@ -86,7 +93,7 @@ export function MapView() {
   const annuleerKeuze = useCallback(() => {
     if (!mapPick) return;
     setMapPick(null);
-    setMobileTab(mapPick.mode === "nieuw" ? "dag" : "dagdeel");
+    setMobileTab(mapPick.mode === "favoriet" ? "dag" : "dagdeel");
   }, [mapPick, setMapPick, setMobileTab]);
 
   // Escape breekt het kiezen af.
@@ -102,8 +109,8 @@ export function MapView() {
   const { user } = useSession();
 
   /**
-   * Een klik telt alleen als de kaart in kiesmodus staat, gezet met de
-   * kiesknop in de dagplanning of in het dagdeelpaneel. Anders zou pannen en
+   * Een klik telt alleen als de kaart in kiesmodus staat, gezet met de knop
+   * "+ Favoriet" of de kiesknop in het dagdeelpaneel. Anders zou pannen en
    * zoomen ongemerkt punten aanwijzen.
    */
   async function handleClick(event: MapLayerMouseEvent) {
@@ -120,44 +127,28 @@ export function MapView() {
 
     const name = await plaatsnaam(lat, lng);
 
-    if (mapPick.mode === "locatie") {
-      const activity = activities?.find(
-        (kandidaat) => kandidaat.id === mapPick.activityId,
-      );
-      if (activity) {
-        await saveActivity(user.id, { ...activity, location: { name, lat, lng } });
+    if (mapPick.mode === "favoriet") {
+      if (tripId) {
+        await saveFavorite(user.id, {
+          id: crypto.randomUUID(),
+          tripId,
+          name,
+          lat,
+          lng,
+          updatedAt: new Date().toISOString(),
+          deletedAt: null,
+        });
       }
-      setMobileTab("dagdeel");
+      setMobileTab("dag");
       return;
     }
 
-    // Het formulier in de dagplanning maakt er een dagdeel van.
-    setDraftLocation({ name, lat, lng });
-    setMobileTab("dag");
+    const activity = activities?.find((kandidaat) => kandidaat.id === mapPick.activityId);
+    if (activity) {
+      await saveActivity(user.id, { ...activity, location: { name, lat, lng } });
+    }
+    setMobileTab("dagdeel");
   }
-
-  // Bij wisselen van dag het beeld om de locaties van die dag leggen. Wacht op
-  // `loaded`: vóór dat moment negeert MapLibre camera-opdrachten.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !loaded || places.length === 0) return;
-
-    if (places.length === 1) {
-      const { lng, lat } = places[0].location;
-      map.easeTo({ center: [lng, lat], zoom: 13, duration: 600 });
-      return;
-    }
-
-    const lngs = places.map((place) => place.location.lng);
-    const lats = places.map((place) => place.location.lat);
-    map.fitBounds(
-      [
-        [Math.min(...lngs), Math.min(...lats)],
-        [Math.max(...lngs), Math.max(...lats)],
-      ],
-      { padding: 64, maxZoom: 15, duration: 600 },
-    );
-  }, [places, loaded]);
 
   /**
    * Een klik op een pin zet dat dagdeel in het detailpaneel; op mobiel is dat
@@ -178,11 +169,26 @@ export function MapView() {
       initialViewState={FALLBACK_VIEW}
       mapStyle={mapStyle}
       style={{ width: "100%", height: "100%" }}
-      onLoad={() => setLoaded(true)}
       onClick={handleClick}
       cursor={mapPick ? "crosshair" : undefined}
     >
       <NavigationControl position="top-right" showCompass={false} />
+
+      <div className="absolute left-3 top-3 z-10 w-72 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-surface px-3 py-2 shadow-md">
+        <PlaceSearch
+          label="Zoek op de kaart"
+          placeholder="Plaats, adres of “supermarkt”"
+          bias={() => mapRef.current?.getCenter()}
+          onPick={(place) => {
+            setZoekPunt(place);
+            mapRef.current?.easeTo({
+              center: [place.lng, place.lat],
+              zoom: 14,
+              duration: 800,
+            });
+          }}
+        />
+      </div>
 
       {/*
         Op mobiel staat de dagkolom in een ander tabblad, dus moet de kaart zelf
@@ -191,12 +197,14 @@ export function MapView() {
       {mapPick && (
         <div
           role="status"
-          className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex items-center gap-3 rounded-md border border-danger bg-surface px-3 py-2 text-xs text-text-muted shadow-md lg:inset-x-auto lg:bottom-auto lg:left-3 lg:top-3 lg:max-w-sm"
+          className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex items-center gap-3 rounded-md border border-danger bg-surface px-3 py-2 text-xs text-text-muted shadow-md lg:inset-x-auto lg:bottom-auto lg:left-3 lg:top-20 lg:max-w-sm"
         >
           <span className="flex-1">
             {mapPick.mode === "verplaatsen"
               ? "Klik op de kaart om de nieuwe plek te kiezen."
-              : "Klik op de kaart om de plek te kiezen."}
+              : mapPick.mode === "favoriet"
+                ? "Klik op de kaart om de favoriet te plaatsen."
+                : "Klik op de kaart om de plek te kiezen."}
           </span>
           <button
             type="button"
@@ -223,6 +231,35 @@ export function MapView() {
             }}
           />
         </Source>
+      )}
+
+      {zoekPunt && (
+        <Marker longitude={zoekPunt.lng} latitude={zoekPunt.lat} anchor="bottom">
+          <span className="flex max-w-56 items-center gap-1 rounded-full border-2 border-secondary bg-primary px-2 py-1 text-xs font-semibold text-on-primary shadow-md">
+            <MapPinIcon className="size-3.5 shrink-0" />
+            <span className="truncate">{zoekPunt.name}</span>
+            <button
+              type="button"
+              onClick={() => setZoekPunt(null)}
+              aria-label={`Zoekpunt ${zoekPunt.name} wissen`}
+              className="shrink-0 rounded-sm px-0.5"
+            >
+              ×
+            </button>
+          </span>
+        </Marker>
+      )}
+
+      {stay && (
+        <Marker longitude={stay.lng} latitude={stay.lat} anchor="bottom">
+          <span
+            aria-label={`Verblijfplaats: ${stay.name}`}
+            title={`Verblijfplaats: ${stay.name}`}
+            className="flex size-7 items-center justify-center rounded-full border-2 border-secondary bg-surface text-text shadow-sm"
+          >
+            <MapPinIcon />
+          </span>
+        </Marker>
       )}
 
       {places.map((place, index) => (

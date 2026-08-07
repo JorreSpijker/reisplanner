@@ -37,6 +37,30 @@ export type Day = Verwijderbaar & {
   date: string;
   /** Vrije notitie als HTML, geschreven in de editor van de dagplanning. */
   notes: string;
+  /**
+   * Favoriet waar je deze dag verblijft. Null betekent: dezelfde als de vorige
+   * dag met een keuze. Je slaapt meestal meer dan één nacht op dezelfde plek,
+   * dus zou elke dag opnieuw kiezen alleen maar werk zijn.
+   */
+  stayFavoriteId: string | null;
+  /** Begint de route van deze dag bij de verblijfplaats? */
+  startAtStay: boolean;
+  /** Eindigt de route van deze dag weer bij de verblijfplaats? */
+  endAtStay: boolean;
+  updatedAt: string;
+};
+
+/**
+ * Plek die je vaker nodig hebt dan één dagdeel: het hotel, de supermarkt om de
+ * hoek. Hoort bij de reis, niet bij een dag, en kan als dagdeel in elke
+ * dagplanning gezet worden.
+ */
+export type Favorite = Verwijderbaar & {
+  id: string;
+  tripId: string;
+  name: string;
+  lat: number;
+  lng: number;
   updatedAt: string;
 };
 
@@ -91,5 +115,6 @@ export type TripData = {
   trip: Trip;
   days: Day[];
   activities: Activity[];
+  favorites: Favorite[];
   routes: RouteCache[];
 };

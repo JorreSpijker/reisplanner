@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth/session";
-import { useTripStore } from "@/lib/store";
+import { useFavorites, useTripStore } from "@/lib/store";
 import type { Activity } from "@/lib/types";
 import { MapPinIcon } from "./map-pin-icon";
 import { PlaceSearch } from "./place-search";
@@ -115,10 +115,31 @@ function ActivityTime({ activity }: { activity: Activity }) {
 function ActivityLocationBlock({ activity }: { activity: Activity }) {
   const { user } = useSession();
   const saveActivity = useTripStore((state) => state.saveActivity);
+  const saveFavorite = useTripStore((state) => state.saveFavorite);
+  const tripId = useTripStore((state) => state.data?.trip.id);
+  const favorites = useFavorites();
   const mapPick = useTripStore((state) => state.mapPick);
   const setMapPick = useTripStore((state) => state.setMapPick);
   const setMobileTab = useTripStore((state) => state.setMobileTab);
   const { location } = activity;
+
+  // Dezelfde coördinaten betekent dezelfde plek; de naam mag afwijken.
+  const alFavoriet = favorites.some(
+    (favorite) => favorite.lat === location?.lat && favorite.lng === location?.lng,
+  );
+
+  function handleFavoriet() {
+    if (!user || !tripId || !location) return;
+    void saveFavorite(user.id, {
+      id: crypto.randomUUID(),
+      tripId,
+      name: location.name,
+      lat: location.lat,
+      lng: location.lng,
+      updatedAt: new Date().toISOString(),
+      deletedAt: null,
+    });
+  }
 
   const modus = location ? ("verplaatsen" as const) : ("locatie" as const);
   const kiest = mapPick?.mode === modus && mapPick.activityId === activity.id;
@@ -181,7 +202,30 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
           </p>
         </div>
 
-        {kiesKnop}
+        <div className="flex flex-wrap gap-2">
+          {kiesKnop}
+
+          {/* Coördinaten en niet de naam: die wijst Google altijd op de plek
+              aan die hier op de kaart staat. */}
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex shrink-0 items-center gap-2 self-start rounded-md border border-border-strong px-3 py-2 text-sm transition-colors hover:bg-surface-sunken"
+          >
+            <MapPinIcon />
+            Open in Google Maps
+          </a>
+
+          <button
+            type="button"
+            onClick={handleFavoriet}
+            disabled={alFavoriet}
+            className="flex shrink-0 items-center gap-2 self-start rounded-md border border-border-strong px-3 py-2 text-sm transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {alFavoriet ? "Staat in favorieten" : "Favoriet maken"}
+          </button>
+        </div>
 
         <button
           type="button"

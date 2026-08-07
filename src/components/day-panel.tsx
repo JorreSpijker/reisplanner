@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "@/lib/auth/session";
 import { formatDayLabel } from "@/lib/dates";
 import { useActiveDay, useTripStore } from "@/lib/store";
 import { DayPlan } from "./day-plan";
@@ -7,10 +8,12 @@ import { OfflineMapPanel } from "./offline-map-panel";
 import { TripTransfer } from "./trip-transfer";
 
 export function DayPanel() {
+  const { user } = useSession();
   const trip = useTripStore((state) => state.data?.trip);
   const days = useTripStore((state) => state.data?.days);
   const activeDayId = useTripStore((state) => state.activeDayId);
   const setActiveDay = useTripStore((state) => state.setActiveDay);
+  const addDay = useTripStore((state) => state.addDay);
   const activeDay = useActiveDay();
 
   if (!trip || !days) return null;
@@ -32,7 +35,13 @@ export function DayPanel() {
       </header>
 
       <nav aria-label="Dagen" className="border-b border-border">
-        <ul className="flex gap-2 overflow-x-auto px-6 py-3">
+        <ul className="flex items-stretch gap-2 overflow-x-auto px-6 py-3">
+          <li>
+            <AddDayButton
+              label="Dag ervoor toevoegen"
+              onClick={() => user && void addDay(user.id, "voor")}
+            />
+          </li>
           {days.map((day, index) => {
             const active = day.id === activeDayId;
             return (
@@ -57,6 +66,12 @@ export function DayPanel() {
               </li>
             );
           })}
+          <li>
+            <AddDayButton
+              label="Dag erna toevoegen"
+              onClick={() => user && void addDay(user.id, "na")}
+            />
+          </li>
         </ul>
       </nav>
 
@@ -64,5 +79,19 @@ export function DayPanel() {
         {activeDay && <DayPlan key={activeDay.id} day={activeDay} />}
       </div>
     </aside>
+  );
+}
+
+function AddDayButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex h-full items-center rounded-md border border-dashed border-border px-3 text-lg text-text-muted transition-colors hover:bg-surface-sunken"
+    >
+      +
+    </button>
   );
 }

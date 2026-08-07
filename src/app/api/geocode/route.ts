@@ -9,7 +9,8 @@ const PHOTON_SEARCH = "https://photon.komoot.io/api/";
  * componenten aan te passen.
  */
 export async function GET(request: Request) {
-  const query = new URL(request.url).searchParams.get("q")?.trim();
+  const params = new URL(request.url).searchParams;
+  const query = params.get("q")?.trim();
   if (!query) {
     return NextResponse.json({ error: "Parameter q ontbreekt" }, { status: 400 });
   }
@@ -17,6 +18,15 @@ export async function GET(request: Request) {
   const url = new URL(PHOTON_SEARCH);
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "6");
+
+  // Photon weegt resultaten dicht bij dit punt zwaarder. Zonder dat levert een
+  // soort ("supermarkt", "museum") treffers uit heel Europa op.
+  const lat = Number(params.get("lat"));
+  const lng = Number(params.get("lng"));
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lng));
+  }
 
   const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!response.ok) {

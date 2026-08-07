@@ -1,15 +1,18 @@
 import { openDB, type IDBPDatabase } from "idb";
-import type { Activity, Day, RouteCache, Trip, TripData } from "@/lib/types";
+import type { Activity, Day, Favorite, RouteCache, Trip, TripData } from "@/lib/types";
 import type { TripRepository } from "./types";
 import { mergeTrips, type MergeResult } from "./merge";
 import {
   applyTripPatch,
   createTripData,
+  moveActivities,
   normalize,
   removeActivity,
+  removeFavorite,
   reorderActivities,
   upsertActivity,
   upsertDay,
+  upsertFavorite,
   upsertRoute,
   withoutDeleted,
 } from "./operations";
@@ -136,6 +139,30 @@ export class IndexedDbRepository implements TripRepository {
     return saved;
   }
 
+  async moveActivities(
+    userId: string,
+    input: {
+      sourceDayId: string;
+      targetDayId: string;
+      activityIds: string[];
+      withNotes: boolean;
+    },
+  ): Promise<TripData> {
+    const data = moveActivities(await this.require(userId), input);
+    await this.write(userId, data);
+    return withoutDeleted(data);
+  }
+
+  async saveFavorite(userId: string, favorite: Favorite): Promise<Favorite> {
+    const { data, saved } = upsertFavorite(await this.require(userId), favorite);
+    await this.write(userId, data);
+    return saved;
+  }
+
+  async deleteFavorite(userId: string, favoriteId: string): Promise<void> {
+    await this.write(userId, removeFavorite(await this.require(userId), favoriteId));
+  }
+
   async saveRoute(userId: string, cache: RouteCache): Promise<void> {
     await this.write(userId, upsertRoute(await this.require(userId), cache));
   }
@@ -153,6 +180,7 @@ export class IndexedDbRepository implements TripRepository {
       trip: binnengekomen.trip,
       days: [],
       activities: [],
+      favorites: [],
       routes: [],
     };
 

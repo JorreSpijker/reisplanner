@@ -11,10 +11,17 @@ import type { Place } from "@/lib/geocode";
 export function PlaceSearch({
   label,
   placeholder,
+  bias,
   onPick,
 }: {
   label: string;
   placeholder: string;
+  /**
+   * Geeft het punt waar de resultaten omheen mogen liggen, meestal het
+   * kaartmidden. Een functie en geen waarde: dat midden verschuift bij elk
+   * pannen, en dat mag geen nieuwe zoekopdracht uitlokken.
+   */
+  bias?: () => { lat: number; lng: number } | undefined;
   onPick: (place: Place) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -22,6 +29,13 @@ export function PlaceSearch({
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const biasRef = useRef(bias);
+
+  // Bijhouden in een ref en niet in de afhankelijkheden van het zoekeffect:
+  // de aanroeper geeft elke render een nieuwe functie mee.
+  useEffect(() => {
+    biasRef.current = bias;
+  });
 
   useEffect(() => {
     const term = query.trim();
@@ -32,7 +46,9 @@ export function PlaceSearch({
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const response = await fetch(`/api/geocode?q=${encodeURIComponent(term)}`, {
+        const punt = biasRef.current?.();
+        const rond = punt ? `&lat=${punt.lat}&lng=${punt.lng}` : "";
+        const response = await fetch(`/api/geocode?q=${encodeURIComponent(term)}${rond}`, {
           signal: controller.signal,
         });
         if (!response.ok) throw new Error("zoeken mislukt");

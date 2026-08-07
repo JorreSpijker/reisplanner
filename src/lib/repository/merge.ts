@@ -1,4 +1,4 @@
-import type { Activity, Day, RouteCache, TripData } from "@/lib/types";
+import type { Activity, Day, Favorite, RouteCache, TripData } from "@/lib/types";
 import { normalize } from "./operations";
 
 /**
@@ -11,7 +11,7 @@ import { normalize } from "./operations";
  */
 
 export type MergeChange = {
-  soort: "dag" | "dagdeel";
+  soort: "dag" | "dagdeel" | "favoriet";
   naam: string;
   actie: "nieuw" | "bijgewerkt" | "verwijderd";
 };
@@ -41,11 +41,20 @@ export function mergeTrips(eigen: TripData, binnengekomen: TripData): MergeResul
     changes,
   );
 
+  const favorites = mergeCollection<Favorite>(
+    mijn.favorites,
+    hun.favorites,
+    "favoriet",
+    (favorite) => favorite.name,
+    changes,
+  );
+
   return {
     data: {
       trip: hun.trip.updatedAt > mijn.trip.updatedAt ? hun.trip : mijn.trip,
       days: [...days].sort((a, b) => a.date.localeCompare(b.date)),
       activities: renumber(activities),
+      favorites,
       routes: mergeRoutes(mijn.routes, hun.routes),
     },
     changes,

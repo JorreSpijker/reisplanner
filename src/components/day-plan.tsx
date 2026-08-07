@@ -5,9 +5,11 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   restrictToParentElement,
@@ -24,10 +26,16 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth/session";
 import { formatDistance, formatDuration, type RouteLeg } from "@/lib/route";
-import { useActiveDayPlaces, useDayActivities, useTripStore } from "@/lib/store";
-import type { Activity, Day } from "@/lib/types";
-import { MapPinIcon } from "./map-pin-icon";
-import { PlaceSearch } from "./place-search";
+import {
+  useActiveDayPlaces,
+  useActiveDayStay,
+  useActiveDayStayRoute,
+  useDayActivities,
+  useTripStore,
+} from "@/lib/store";
+import type { Activity, Day, Favorite } from "@/lib/types";
+import { Favorites } from "./favorites";
+import { MoveActivities } from "./move-activities";
 import { RichText } from "./rich-text";
 
 /**
@@ -38,52 +46,147 @@ import { RichText } from "./rich-text";
  */
 export function DayPlan({ day }: { day: Day }) {
   const { user } = useSession();
-
-  return (
-    <section className="flex flex-col gap-5">
-      <Planning dayId={day.id} userId={user?.id} />
-
-      <div className="flex flex-col gap-1.5 border-t border-border pt-4">
-        <h3 className="text-sm font-medium">Notitie bij deze dag</h3>
-        <DayNote day={day} />
-      </div>
-    </section>
-  );
-}
-
-function Planning({ dayId, userId }: { dayId: string; userId?: string }) {
-  const activities = useDayActivities(dayId);
-  const places = useActiveDayPlaces();
+  const activities = useDayActivities(day.id);
   const reorderActivities = useTripStore((state) => state.reorderActivities);
-  const mapPick = useTripStore((state) => state.mapPick);
-  const route = useTripStore((state) => state.route);
-  const routeStatus = useTripStore((state) => state.routeStatus);
+  const addActivity = useTripStore((state) => state.addActivity);
+  // Een favoriet komt uit de strip erboven en mag dus buiten de lijst beginnen;
+  // een dagdeel verslepen blijft binnen de lijst.
+  const [sleeptFavoriet, setSleeptFavoriet] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // Het nummer op de kaart telt alleen de dagdelen mét locatie, zodat de
-  // markers op de kaart en de nummers in deze lijst gelijk lopen.
-  const placeIndex = new Map(places.map((place, index) => [place.id, index]));
+  function handleDragStart(event: DragStartEvent) {
+    setSleeptFavoriet(event.active.data.current?.type === "favoriet");
+  }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!userId || !over || active.id === over.id) return;
+    setSleeptFavoriet(false);
+    if (!user || !over) return;
 
     const ids = activities.map((activity) => activity.id);
+    const favorite = active.data.current?.favorite as Favorite | undefined;
+
+    if (favorite) {
+      const created = await addActivity(user.id, day.id, {
+        time: "",
+        title: favorite.name,
+        location: { name: favorite.name, lat: favorite.lat, lng: favorite.lng },
+      });
+
+      // Losgelaten op een dagdeel: daar komt hij vóór. Elders in de lijst:
+      // achteraan, waar `addActivity` hem al zette.
+      const index = ids.indexOf(String(over.id));
+      if (created && index !== -1) {
+        await reorderActivities(user.id, day.id, [
+          ...ids.slice(0, index),
+          created.id,
+          ...ids.slice(index),
+        ]);
+      }
+      return;
+    }
+
+    if (active.id === over.id) return;
     const next = arrayMove(
       ids,
       ids.indexOf(String(active.id)),
       ids.indexOf(String(over.id)),
     );
-    await reorderActivities(userId, dayId, next);
+    await reorderActivities(user.id, day.id, next);
   }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={sleeptFavoriet ? [] : [restrictToVerticalAxis, restrictToParentElement]}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <section className="flex flex-col gap-5">
+        <Planning day={day} userId={user?.id} />
+
+        <Favorites day={day} />
+
+        <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+          <h3 className="text-sm font-medium">Notitie bij deze dag</h3>
+          <DayNote day={day} />
+        </div>
+
+        <div className="flex flex-col border-t border-border pt-4">
+          <MoveActivities day={day} />
+        </div>
+      </section>
+    </DndContext>
+  );
+}
+
+/** Waar een favoriet losgelaten mag worden om achteraan de dag te komen. */
+const PLANNING_DROP_ID = "dagplanning";
+
+function Planning({ day, userId }: { day: Day; userId?: string }) {
+  const activities = useDayActivities(day.id);
+  const places = useActiveDayPlaces();
+  const stay = useActiveDayStayRoute();
+  // De verblijfplaats zelf, ook als de route er deze dag niet langsgaat: anders
+  // zouden de vinkjes verdwijnen zodra je ze allebei uitzet.
+  const verblijf = useActiveDayStay();
+  const mapPick = useTripStore((state) => state.mapPick);
+  const route = useTripStore((state) => state.route);
+  const routeStatus = useTripStore((state) => state.routeStatus);
+  const saveDay = useTripStore((state) => state.saveDay);
+  const { setNodeRef, isOver } = useDroppable({ id: PLANNING_DROP_ID });
+
+  // Het nummer op de kaart telt alleen de dagdelen mét locatie, zodat de
+  // markers op de kaart en de nummers in deze lijst gelijk lopen.
+  const placeIndex = new Map(places.map((place, index) => [place.id, index]));
+
+  // Staat het verblijf vooraan in de route, dan schuiven alle trajecten één
+  // op: het eerste dagdeel heeft dan de rit vanaf het verblijf.
+  const heeftPunten = stay !== null && places.length > 0;
+  const vanafVerblijf = heeftPunten && stay.vanaf;
+  const legOffset = vanafVerblijf ? 1 : 0;
+  const terugNaarVerblijf = heeftPunten && stay.terug;
+  const terugLeg = terugNaarVerblijf
+    ? route?.legs[places.length + legOffset - 1]
+    : undefined;
 
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-sm font-medium">Dagplanning</h2>
+
+      {/*
+        Per dag: begint en eindigt hij bij het verblijf. Op een doorreisdag
+        vertrek je er wel, maar kom je er niet terug.
+      */}
+      {verblijf && (
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2 text-xs text-text-muted">
+            <input
+              type="checkbox"
+              checked={day.startAtStay}
+              onChange={(event) =>
+                userId && void saveDay(userId, { ...day, startAtStay: event.target.checked })
+              }
+            />
+            {`Vertrek vanaf ${verblijf.name}`}
+          </label>
+          <label className="flex items-center gap-2 text-xs text-text-muted">
+            <input
+              type="checkbox"
+              checked={day.endAtStay}
+              onChange={(event) =>
+                userId && void saveDay(userId, { ...day, endAtStay: event.target.checked })
+              }
+            />
+            {`Eindig bij ${verblijf.name}`}
+          </label>
+        </div>
+      )}
 
       {mapPick && (
         <p
@@ -96,18 +199,18 @@ function Planning({ dayId, userId }: { dayId: string; userId?: string }) {
         </p>
       )}
 
-      {activities.length === 0 ? (
-        <p className="text-sm text-text-subtle">
-          Nog niets gepland. Voeg hieronder een dagdeel toe, met of zonder plek
-          op de kaart.
-        </p>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-          onDragEnd={handleDragEnd}
-        >
+      <div
+        ref={setNodeRef}
+        className={`rounded-md transition-colors ${
+          isOver ? "outline-2 outline-dashed outline-secondary" : ""
+        }`}
+      >
+        {activities.length === 0 ? (
+          <p className="text-sm text-text-subtle">
+            Nog niets gepland. Voeg hieronder een dagdeel toe of sleep er een
+            favoriet heen.
+          </p>
+        ) : (
           <SortableContext
             items={activities.map((activity) => activity.id)}
             strategy={verticalListSortingStrategy}
@@ -120,31 +223,52 @@ function Planning({ dayId, userId }: { dayId: string; userId?: string }) {
                     key={activity.id}
                     activity={activity}
                     number={index === undefined ? null : index + 1}
-                    // Leg `index - 1` is het traject vanaf de vorige plek hierheen.
-                    leg={index !== undefined && index > 0 ? route?.legs[index - 1] : undefined}
+                    // Het traject vanaf het vorige punt naar dit dagdeel.
+                    leg={index === undefined ? undefined : route?.legs[index - 1 + legOffset]}
+                    legZichtbaar={index !== undefined && (index > 0 || vanafVerblijf)}
                     routeLoading={routeStatus === "loading"}
                   />
                 );
               })}
             </ol>
           </SortableContext>
-        </DndContext>
+        )}
+      </div>
+
+      {terugNaarVerblijf && (
+        <p className="px-3 font-mono text-xs text-text-subtle">
+          {`${legLabel(terugLeg, routeStatus === "loading")} · terug naar ${stay.favorite.name}`}
+        </p>
       )}
 
-      <ActivityForm dayId={dayId} userId={userId} />
+      <ActivityForm dayId={day.id} userId={userId} />
     </div>
   );
+}
+
+/** "35 min · 12,4 km", of wat daar bij een ontbrekende route van te zeggen is. */
+function legLabel(leg: RouteLeg | undefined, routeLoading: boolean): string {
+  if (!leg) return routeLoading ? "route berekenen…" : "";
+  return [
+    leg.duration === null ? null : formatDuration(leg.duration),
+    formatDistance(leg.distance),
+    leg.duration === null ? "hemelsbreed" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function SortableActivity({
   activity,
   number,
   leg,
+  legZichtbaar,
   routeLoading,
 }: {
   activity: Activity;
   number: number | null;
   leg?: RouteLeg;
+  legZichtbaar: boolean;
   routeLoading: boolean;
 }) {
   const { user } = useSession();
@@ -166,19 +290,9 @@ function SortableActivity({
       onMouseLeave={() => setHoveredActivity(null)}
       className={isDragging ? "z-10" : undefined}
     >
-      {number !== null && number > 1 && (
+      {legZichtbaar && (
         <p className="px-3 py-1 font-mono text-xs text-text-subtle">
-          {routeLoading && !leg
-            ? "route berekenen…"
-            : leg
-              ? [
-                  leg.duration === null ? null : formatDuration(leg.duration),
-                  formatDistance(leg.distance),
-                  leg.duration === null ? "hemelsbreed" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
-              : null}
+          {legLabel(leg, routeLoading)}
         </p>
       )}
 
@@ -247,45 +361,25 @@ function SortableActivity({
   );
 }
 
+/**
+ * Nieuw dagdeel: alleen tijd en titel. De plek op de kaart zet je in het
+ * dagdeelpaneel, zodat er één plek is waar een locatie vandaan komt.
+ */
 function ActivityForm({ dayId, userId }: { dayId: string; userId?: string }) {
   const addActivity = useTripStore((state) => state.addActivity);
-  const mapPick = useTripStore((state) => state.mapPick);
-  const setMapPick = useTripStore((state) => state.setMapPick);
-  // De locatie staat in de store: zowel het zoekveld hieronder als een klik op
-  // de kaart vult hem, en de kaart kent dit formulier niet.
-  const location = useTripStore((state) => state.draftLocation);
-  const setLocation = useTripStore((state) => state.setDraftLocation);
-  const setMobileTab = useTripStore((state) => state.setMobileTab);
 
   const [time, setTime] = useState("");
   const [title, setTitle] = useState("");
 
-  const kiest = mapPick?.mode === "nieuw";
-  // Zonder eigen titel is de naam van de plek de titel.
-  const definitieveTitel = title.trim() || location?.name || "";
-
-  function handleKies() {
-    if (kiest) {
-      setMapPick(null);
-      return;
-    }
-    setMapPick({ mode: "nieuw" });
-    // Op mobiel staat de kaart in een eigen tabblad; daar valt pas iets te kiezen.
-    setMobileTab("kaart");
-  }
+  const definitieveTitel = title.trim();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!userId || definitieveTitel.length === 0) return;
 
-    await addActivity(userId, dayId, {
-      time: time.trim(),
-      title: definitieveTitel,
-      location,
-    });
+    await addActivity(userId, dayId, { time: time.trim(), title: definitieveTitel });
     setTime("");
     setTitle("");
-    setLocation(null);
   }
 
   return (
@@ -301,52 +395,11 @@ function ActivityForm({ dayId, userId }: { dayId: string; userId?: string }) {
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          // Met een gekozen plek is de titel optioneel: die plek is de titel.
-          placeholder={location ? location.name : "Wandelen"}
+          placeholder="Wandelen"
           aria-label="Dagdeel"
           className="flex-1 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm placeholder:text-text-subtle"
         />
       </div>
-
-      {location ? (
-        <p className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm">
-          <MapPinIcon className="size-4 shrink-0 text-text-subtle" />
-          <span className="min-w-0 flex-1 truncate">{location.name}</span>
-          <button
-            type="button"
-            onClick={() => setLocation(null)}
-            aria-label="Locatie loslaten"
-            className="rounded-sm px-1 text-text-subtle hover:text-danger"
-          >
-            ×
-          </button>
-        </p>
-      ) : (
-        <div className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
-            <PlaceSearch
-              label="Locatie (optioneel)"
-              placeholder="Zoek een plek"
-              onPick={(place) =>
-                setLocation({ name: place.name, lat: place.lat, lng: place.lng })
-              }
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleKies}
-            aria-pressed={kiest}
-            className={`flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
-              kiest
-                ? "border-danger bg-surface-raised font-medium"
-                : "border-border-strong hover:bg-surface-sunken"
-            }`}
-          >
-            <MapPinIcon />
-            {kiest ? "Annuleren" : "Kies op kaart"}
-          </button>
-        </div>
-      )}
 
       <button
         type="submit"

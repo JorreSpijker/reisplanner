@@ -1,5 +1,12 @@
 import { datesBetween } from "@/lib/dates";
-import type { Activity, Day, RouteCache, Trip, TripData } from "@/lib/types";
+import type {
+  Activity,
+  Day,
+  Favorite,
+  RouteCache,
+  Trip,
+  TripData,
+} from "@/lib/types";
 
 /**
  * Bewerkingen op een reis, los van waar hij is opgeslagen. Elke functie krijgt
@@ -25,8 +32,16 @@ export function normalize(data: TripData): TripData {
 
   return {
     trip: data.trip,
-    days: data.days.map(withTombstone),
+    // Dagen van vóór de favorieten kennen nog geen verblijfplaats. Heen en
+    // terug staan standaard aan: dat was het gedrag toen het nog vastlag.
+    days: data.days.map((day) => ({
+      ...withTombstone(day),
+      stayFavoriteId: day.stayFavoriteId ?? null,
+      startAtStay: day.startAtStay ?? true,
+      endAtStay: day.endAtStay ?? true,
+    })),
     activities: activities.map(withTombstone),
+    favorites: (data.favorites ?? []).map(withTombstone),
     // Bewaarde routes van vóór de dagdelen horen bij stops die er niet meer
     // zijn; ze zouden toch nooit meer op de huidige sleutel passen.
     routes: (data.routes ?? []).filter((route) => route.waypointsKey !== undefined),
@@ -49,6 +64,7 @@ export function withoutDeleted(data: TripData): TripData {
     activities: data.activities.filter(
       (activity) => !activity.deletedAt && liveDayIds.has(activity.dayId),
     ),
+    favorites: data.favorites.filter((favorite) => !favorite.deletedAt),
     routes: data.routes.filter((route) => liveDayIds.has(route.dayId)),
   };
 }
@@ -89,11 +105,14 @@ export function createTripData(
     tripId: trip.id,
     date,
     notes: "",
+    stayFavoriteId: null,
+    startAtStay: true,
+    endAtStay: true,
     updatedAt: timestamp,
     deletedAt: null,
   }));
 
-  return { trip, days, activities: [], routes: [] };
+  return { trip, days, activities: [], favorites: [], routes: [] };
 }
 
 export function applyTripPatch(
@@ -128,6 +147,9 @@ export function applyTripPatch(
       tripId: trip.id,
       date,
       notes: "",
+      stayFavoriteId: null,
+      startAtStay: true,
+      endAtStay: true,
       updatedAt: timestamp,
       deletedAt: null,
     }));
@@ -147,10 +169,10 @@ export function applyTripPatch(
     );
 
   return {
+    ...data,
     trip,
     days,
     activities: markeerBijVervallenDag(data.activities),
-    routes: data.routes,
   };
 }
 
@@ -163,6 +185,29 @@ export function upsertDay(data: TripData, day: Day): { data: TripData; saved: Da
     },
     saved,
   };
+}
+
+export function upsertFavorite(
+  data: TripData,
+  favorite: Favorite,
+): { data: TripData; saved: Favorite } {
+  const saved: Favorite = { ...favorite, updatedAt: now() };
+  const exists = data.favorites.some((existing) => existing.id === saved.id);
+  return {
+    data: {
+      ...data,
+      favorites: exists
+        ? data.favorites.map((existing) =>
+            existing.id === saved.id ? saved : existing,
+          )
+        : [...data.favorites, saved],
+    },
+    saved,
+  };
+}
+
+export function removeFavorite(data: TripData, favoriteId: string): TripData {
+  return { ...data, favorites: markDeleted(data.favorites, favoriteId, now()) };
 }
 
 export function reorderActivities(
@@ -184,6 +229,82 @@ export function reorderActivities(
     saved: activities
       .filter((activity) => activity.dayId === dayId && !activity.deletedAt)
       .sort((a, b) => a.order - b.order),
+  };
+}
+
+/**
+ * Verplaatst dagdelen naar een andere dag; ze komen achter wat daar al staat.
+ * De achterblijvers worden hernummerd, anders blijft er een gat in de `order`
+ * en krijgt een volgend nieuw dagdeel hetzelfde nummer als een bestaand.
+ */
+export function moveActivities(
+  data: TripData,
+  input: {
+    sourceDayId: string;
+    targetDayId: string;
+    activityIds: string[];
+    withNotes: boolean;
+  },
+): TripData {
+  const timestamp = now();
+  const meeVerhuizend = new Set(input.activityIds);
+  const levend = data.activities.filter((activity) => !activity.deletedAt);
+
+  const verhuizers = levend
+    .filter((activity) => activity.dayId === input.sourceDayId && meeVerhuizend.has(activity.id))
+    .sort((a, b) => a.order - b.order);
+
+  const vanaf = levend.filter((activity) => activity.dayId === input.targetDayId).length;
+  const nieuweOrder = new Map(
+    verhuizers.map((activity, index) => [activity.id, vanaf + index]),
+  );
+
+  const verhuisd: TripData = {
+    ...data,
+    activities: data.activities.map<Activity>((activity) =>
+      nieuweOrder.has(activity.id)
+        ? {
+            ...activity,
+            dayId: input.targetDayId,
+            order: nieuweOrder.get(activity.id)!,
+            updatedAt: timestamp,
+          }
+        : activity,
+    ),
+  };
+
+  // Hernummert de bron: dezelfde volgorde, weer aaneengesloten vanaf 0.
+  const achterblijvers = verhuisd.activities
+    .filter((activity) => activity.dayId === input.sourceDayId && !activity.deletedAt)
+    .sort((a, b) => a.order - b.order)
+    .map((activity) => activity.id);
+
+  const { data: hernummerd } = reorderActivities(
+    verhuisd,
+    input.sourceDayId,
+    achterblijvers,
+  );
+
+  if (!input.withNotes) return hernummerd;
+
+  const bronNotitie = data.days.find((day) => day.id === input.sourceDayId)?.notes ?? "";
+  const doelNotitie = data.days.find((day) => day.id === input.targetDayId)?.notes ?? "";
+
+  return {
+    ...hernummerd,
+    days: hernummerd.days.map<Day>((day) => {
+      if (day.id === input.sourceDayId) {
+        return { ...day, notes: "", updatedAt: timestamp };
+      }
+      if (day.id === input.targetDayId) {
+        return {
+          ...day,
+          notes: [doelNotitie, bronNotitie].filter(Boolean).join(""),
+          updatedAt: timestamp,
+        };
+      }
+      return day;
+    }),
   };
 }
 

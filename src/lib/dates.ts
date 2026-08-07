@@ -11,6 +11,13 @@ export function datesBetween(start: string, end: string): string[] {
   return dates;
 }
 
+/** Dezelfde datum, `days` dagen verschoven. Negatief schuift terug. */
+export function shiftDate(date: string, days: number): string {
+  const cursor = new Date(`${date}T00:00:00Z`);
+  cursor.setUTCDate(cursor.getUTCDate() + days);
+  return cursor.toISOString().slice(0, 10);
+}
+
 /** "ma 12 mei" — voor de dag-selector. */
 export function formatDayLabel(date: string): string {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString("nl-NL", {

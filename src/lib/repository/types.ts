@@ -1,4 +1,4 @@
-import type { Activity, Day, RouteCache, Trip, TripData } from "@/lib/types";
+import type { Activity, Day, Favorite, RouteCache, Trip, TripData } from "@/lib/types";
 import type { MergeResult } from "./merge";
 
 /**
@@ -36,6 +36,24 @@ export interface TripRepository {
     dayId: string,
     activityIds: string[],
   ): Promise<Activity[]>;
+
+  /**
+   * Verplaatst dagdelen naar een andere dag; ze komen achter wat daar al staat.
+   * Met `withNotes` verhuist de notitie van de dag mee.
+   */
+  moveActivities(
+    userId: string,
+    input: {
+      sourceDayId: string;
+      targetDayId: string;
+      activityIds: string[];
+      withNotes: boolean;
+    },
+  ): Promise<TripData>;
+
+  /** Bewaart een favoriete plek van de reis, of werkt hem bij. */
+  saveFavorite(userId: string, favorite: Favorite): Promise<Favorite>;
+  deleteFavorite(userId: string, favoriteId: string): Promise<void>;
 
   /** Bewaart de opgehaalde route van een dag, zodat hij offline blijft werken. */
   saveRoute(userId: string, cache: RouteCache): Promise<void>;

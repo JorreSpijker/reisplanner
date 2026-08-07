@@ -105,6 +105,7 @@ export function TripTransfer() {
       trip: gelezen.file.data.trip,
       days: [],
       activities: [],
+      favorites: [],
       routes: [],
     };
     const { changes } = mergeTrips(basis, gelezen.file.data);

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { create } from "zustand";
+import { shiftDate } from "@/lib/dates";
 import { getRepository } from "@/lib/repository";
 import type { MergeResult } from "@/lib/repository/merge";
 import { routeKey, straightLineRoute, type DayRoute } from "@/lib/route";
@@ -7,6 +8,7 @@ import type {
   Activity,
   ActivityLocation,
   Day,
+  Favorite,
   RouteCache,
   TripData,
 } from "@/lib/types";
@@ -21,8 +23,8 @@ export type LocatedActivity = Activity & { location: ActivityLocation };
  * hangt af van waar de gebruiker de kiesknop indrukte.
  */
 export type MapPick =
-  /** Het punt wordt de locatie van het dagdeel dat nog toegevoegd wordt. */
-  | { mode: "nieuw" }
+  /** Het punt wordt een nieuwe favoriet van de reis. */
+  | { mode: "favoriet" }
   /** Het punt wordt de locatie van een dagdeel dat er nog geen had. */
   | { mode: "locatie"; activityId: string }
   /** Het punt vervangt de coördinaten; de naam van de locatie blijft staan. */
@@ -41,12 +43,6 @@ type TripState = {
   hoveredActivityId: string | null;
   /** Staat de kaart klaar om een punt aan te wijzen, en waarvoor. */
   mapPick: MapPick | null;
-  /**
-   * De locatie van het dagdeel dat nog toegevoegd moet worden. Staat hier en
-   * niet in het formulier zelf, omdat de kaart hem ook zet: een punt aanwijzen
-   * op de kaart vult ditzelfde veld.
-   */
-  draftLocation: ActivityLocation | null;
   /** Dagdeel waarvan het detailpaneel openstaat. */
   selectedActivityId: string | null;
   /**
@@ -64,23 +60,37 @@ type TripState = {
     input: { name: string; startDate: string; endDate: string },
   ) => Promise<void>;
   setActiveDay: (dayId: string) => void;
+  /** Rekt de reis één dag op, vóór de eerste of na de laatste dag. */
+  addDay: (userId: string, kant: "voor" | "na") => Promise<void>;
   setHoveredActivity: (activityId: string | null) => void;
   setMapPick: (pick: MapPick | null) => void;
-  setDraftLocation: (location: ActivityLocation | null) => void;
   setSelectedActivity: (activityId: string | null) => void;
   setMobileTab: (tab: MobileTab) => void;
-  /** Voegt een dagdeel achteraan de dagplanning toe. */
+  /**
+   * Voegt een dagdeel achteraan de dagplanning toe. Een locatie geef je alleen
+   * mee vanuit een favoriet; verder zet je die in het dagdeelpaneel.
+   */
   addActivity: (
     userId: string,
     dayId: string,
-    input: { time: string; title: string; location?: ActivityLocation | null },
-  ) => Promise<void>;
+    input: { time: string; title: string; location?: ActivityLocation },
+  ) => Promise<Activity | null>;
   saveActivity: (userId: string, activity: Activity) => Promise<void>;
   deleteActivity: (userId: string, activityId: string) => Promise<void>;
   reorderActivities: (
     userId: string,
     dayId: string,
     activityIds: string[],
+  ) => Promise<void>;
+  /** Verplaatst dagdelen, en eventueel de dagnotitie, naar een andere dag. */
+  moveActivities: (
+    userId: string,
+    input: {
+      sourceDayId: string;
+      targetDayId: string;
+      activityIds: string[];
+      withNotes: boolean;
+    },
   ) => Promise<void>;
   /** Zet de locatie van een dagdeel op nieuwe coördinaten; de naam blijft staan. */
   moveActivity: (
@@ -89,7 +99,15 @@ type TripState = {
     lat: number,
     lng: number,
   ) => Promise<void>;
-  loadRoute: (userId: string, places: LocatedActivity[]) => Promise<void>;
+  saveFavorite: (userId: string, favorite: Favorite) => Promise<void>;
+  deleteFavorite: (userId: string, favoriteId: string) => Promise<void>;
+  /** Zet de verblijfplaats van een dag; null neemt die van de vorige dag over. */
+  setDayStay: (userId: string, dayId: string, favoriteId: string | null) => Promise<void>;
+  loadRoute: (
+    userId: string,
+    places: LocatedActivity[],
+    stay: DayStay | null,
+  ) => Promise<void>;
   /** De hele reis inclusief verwijderde records, om weg te schrijven. */
   exportTrip: (userId: string) => Promise<TripData | null>;
   importTrip: (userId: string, binnengekomen: TripData) => Promise<MergeResult>;
@@ -102,13 +120,30 @@ const repository = getRepository();
  * een nieuwere route overschrijven. */
 let routeRequestId = 0;
 
+/**
+ * Verblijfplaats van een dag, met wat die dag ermee doet. Een dag waarop je
+ * doorreist vertrekt wel bij het hotel maar komt er niet terug, dus staan heen
+ * en terug los van elkaar.
+ */
+export type DayStay = { favorite: Favorite; vanaf: boolean; terug: boolean };
+
 /** De punten waarop de routedienst en de bewaarde route werken. */
-function waypoints(places: LocatedActivity[]) {
-  return places.map((place) => ({
+function waypoints(places: LocatedActivity[], stay: DayStay | null) {
+  const onderweg = places.map((place) => ({
     id: place.id,
     lat: place.location.lat,
     lng: place.location.lng,
   }));
+
+  if (!stay || onderweg.length === 0) return onderweg;
+
+  const verblijf = { lat: stay.favorite.lat, lng: stay.favorite.lng };
+
+  return [
+    ...(stay.vanaf ? [{ id: `${stay.favorite.id}:heen`, ...verblijf }] : []),
+    ...onderweg,
+    ...(stay.terug ? [{ id: `${stay.favorite.id}:terug`, ...verblijf }] : []),
+  ];
 }
 
 export const useTripStore = create<TripState>((set, get) => ({
@@ -117,7 +152,6 @@ export const useTripStore = create<TripState>((set, get) => ({
   activeDayId: null,
   hoveredActivityId: null,
   mapPick: null,
-  draftLocation: null,
   selectedActivityId: null,
   // Onderweg lees je vooral de dagplanning; die staat daarom vooraan.
   mobileTab: "dag",
@@ -146,22 +180,40 @@ export const useTripStore = create<TripState>((set, get) => ({
     set({ data, status: "ready", activeDayId: data.days[0]?.id ?? null });
   },
 
-  // Een halfingevuld dagdeel hoort bij de dag waar je het begon; bij het
-  // wisselen van dag verdwijnt het, net als een openstaande kaartkeuze.
-  setActiveDay: (dayId) =>
-    set({ activeDayId: dayId, mapPick: null, draftLocation: null }),
+  // Een openstaande kaartkeuze hoort bij de dag waar je hem begon; bij het
+  // wisselen van dag vervalt hij.
+  setActiveDay: (dayId) => set({ activeDayId: dayId, mapPick: null }),
+  addDay: async (userId, kant) => {
+    const trip = get().data?.trip;
+    if (!trip) return;
+
+    const patch =
+      kant === "voor"
+        ? { id: trip.id, startDate: shiftDate(trip.startDate, -1) }
+        : { id: trip.id, endDate: shiftDate(trip.endDate, 1) };
+
+    const data = await repository.updateTrip(userId, patch);
+    const datum = kant === "voor" ? data.trip.startDate : data.trip.endDate;
+
+    // Meteen naar de nieuwe dag: die voeg je toe om hem in te vullen.
+    set({
+      data,
+      activeDayId: data.days.find((day) => day.date === datum)?.id ?? get().activeDayId,
+      mapPick: null,
+    });
+  },
+
   setHoveredActivity: (activityId) => set({ hoveredActivityId: activityId }),
   setMapPick: (pick) => set({ mapPick: pick }),
-  setDraftLocation: (location) => set({ draftLocation: location }),
   setSelectedActivity: (activityId) => set({ selectedActivityId: activityId }),
   setMobileTab: (tab) => set({ mobileTab: tab }),
 
   addActivity: async (userId, dayId, input) => {
     const data = get().data;
-    if (!data) return;
+    if (!data) return null;
 
     const order = data.activities.filter((activity) => activity.dayId === dayId).length;
-    await get().saveActivity(userId, {
+    const activity: Activity = {
       id: crypto.randomUUID(),
       dayId,
       time: input.time,
@@ -171,7 +223,9 @@ export const useTripStore = create<TripState>((set, get) => ({
       order,
       updatedAt: new Date().toISOString(),
       deletedAt: null,
-    });
+    };
+    await get().saveActivity(userId, activity);
+    return activity;
   },
 
   saveActivity: async (userId, activity) => {
@@ -199,7 +253,7 @@ export const useTripStore = create<TripState>((set, get) => ({
     // Het paneel van een verwijderd dagdeel moet niet blijven staan, en de
     // kaart hoeft er ook geen punt meer voor te vragen.
     const wachtOpDitDagdeel =
-      mapPick !== null && mapPick.mode !== "nieuw" && mapPick.activityId === activityId;
+      mapPick !== null && "activityId" in mapPick && mapPick.activityId === activityId;
 
     set({
       data: {
@@ -225,6 +279,56 @@ export const useTripStore = create<TripState>((set, get) => ({
     });
   },
 
+  moveActivities: async (userId, input) => {
+    const data = await repository.moveActivities(userId, input);
+    const selectedActivityId = get().selectedActivityId;
+
+    // Het detailpaneel hoort bij de dag die je bekijkt; een verhuisd dagdeel
+    // staat daar niet meer tussen.
+    set({
+      data,
+      selectedActivityId:
+        selectedActivityId && input.activityIds.includes(selectedActivityId)
+          ? null
+          : selectedActivityId,
+    });
+  },
+
+  saveFavorite: async (userId, favorite) => {
+    const saved = await repository.saveFavorite(userId, favorite);
+    const data = get().data;
+    if (!data) return;
+    const exists = data.favorites.some((existing) => existing.id === saved.id);
+    set({
+      data: {
+        ...data,
+        favorites: exists
+          ? data.favorites.map((existing) =>
+              existing.id === saved.id ? saved : existing,
+            )
+          : [...data.favorites, saved],
+      },
+    });
+  },
+
+  deleteFavorite: async (userId, favoriteId) => {
+    await repository.deleteFavorite(userId, favoriteId);
+    const data = get().data;
+    if (!data) return;
+    set({
+      data: {
+        ...data,
+        favorites: data.favorites.filter((favorite) => favorite.id !== favoriteId),
+      },
+    });
+  },
+
+  setDayStay: async (userId, dayId, favoriteId) => {
+    const day = get().data?.days.find((kandidaat) => kandidaat.id === dayId);
+    if (!day) return;
+    await get().saveDay(userId, { ...day, stayFavoriteId: favoriteId });
+  },
+
   moveActivity: async (userId, activityId, lat, lng) => {
     const activity = get().data?.activities.find(
       (candidate) => candidate.id === activityId,
@@ -248,14 +352,14 @@ export const useTripStore = create<TripState>((set, get) => ({
     return resultaat;
   },
 
-  loadRoute: async (userId, places) => {
+  loadRoute: async (userId, places, stay) => {
     const dayId = get().activeDayId;
-    if (places.length < 2 || !dayId) {
+    const punten = waypoints(places, stay);
+    if (punten.length < 2 || !dayId) {
       set({ route: null, routeStatus: "idle" });
       return;
     }
 
-    const punten = waypoints(places);
     const key = routeKey(punten);
 
     // Al eens opgehaald voor precies deze punten? Dan die gebruiken. Dat werkt
@@ -329,11 +433,12 @@ export const useTripStore = create<TripState>((set, get) => ({
  */
 export function useRouteSync(userId: string | undefined): void {
   const places = useActiveDayPlaces();
+  const stay = useActiveDayStayRoute();
   const loadRoute = useTripStore((state) => state.loadRoute);
-  const key = routeKey(waypoints(places));
+  const key = routeKey(waypoints(places, stay));
 
   useEffect(() => {
-    if (userId) void loadRoute(userId, places);
+    if (userId) void loadRoute(userId, places, stay);
     // `key` vat de punten samen; `places` zelf is elke render een nieuwe array.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, userId, loadRoute]);
@@ -360,6 +465,45 @@ export function useActiveDay(): Day | null {
   const data = useTripStore((state) => state.data);
   const activeDayId = useTripStore((state) => state.activeDayId);
   return data?.days.find((day) => day.id === activeDayId) ?? null;
+}
+
+/** Favorieten van de reis, op naam. */
+export function useFavorites(): Favorite[] {
+  const data = useTripStore((state) => state.data);
+  return [...(data?.favorites ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * De verblijfplaats van de actieve dag én wat de route ermee doet. Null zodra
+ * die dag noch heen noch terug bij het verblijf langsgaat.
+ */
+export function useActiveDayStayRoute(): DayStay | null {
+  const favorite = useActiveDayStay();
+  const day = useActiveDay();
+  if (!favorite || !day || (!day.startAtStay && !day.endAtStay)) return null;
+  return { favorite, vanaf: day.startAtStay, terug: day.endAtStay };
+}
+
+/**
+ * De verblijfplaats van de actieve dag. Heeft die dag zelf geen keuze, dan
+ * geldt die van de laatste eerdere dag die er wel een had: je blijft in
+ * hetzelfde hotel tot je verhuist.
+ */
+export function useActiveDayStay(): Favorite | null {
+  const data = useTripStore((state) => state.data);
+  const activeDayId = useTripStore((state) => state.activeDayId);
+  if (!data || !activeDayId) return null;
+
+  const dagen = [...data.days].sort((a, b) => a.date.localeCompare(b.date));
+  const tot = dagen.findIndex((day) => day.id === activeDayId);
+  if (tot === -1) return null;
+
+  const keuze = dagen
+    .slice(0, tot + 1)
+    .reverse()
+    .find((day) => day.stayFavoriteId !== null)?.stayFavoriteId;
+
+  return data.favorites.find((favorite) => favorite.id === keuze) ?? null;
 }
 
 /**
