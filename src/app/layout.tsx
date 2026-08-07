@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   title: "Reisplanner",
   description: "Plan je reis met kaart en dagindeling naast elkaar.",
   appleWebApp: { capable: true, title: "Reisplanner", statusBarStyle: "default" },
-  icons: { apple: "/apple-touch-icon.png" },
+  icons: { icon: "/icon-512.png", apple: "/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {

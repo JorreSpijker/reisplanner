@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Map, {
   Layer,
@@ -174,7 +175,19 @@ export function MapView() {
     >
       <NavigationControl position="top-right" showCompass={false} />
 
-      <div className="absolute left-3 top-3 z-10 w-72 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-surface px-3 py-2 shadow-md">
+      {/* Hangt aan de bovenrand van de kaart, met de zoekbalk eronder. */}
+      <div className="absolute left-3 top-0 z-10 rounded-b-md border border-t-0 border-border bg-surface px-2 py-1.5 shadow-md">
+        <Image
+          src="/icon-512.png"
+          alt="Reisplanner"
+          width={512}
+          height={512}
+          priority
+          className="size-9 rounded-sm"
+        />
+      </div>
+
+      <div className="absolute left-3 top-16 z-10 w-72 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-surface px-3 py-2 shadow-md">
         <PlaceSearch
           label="Zoek op de kaart"
           placeholder="Plaats, adres of “supermarkt”"
@@ -197,7 +210,7 @@ export function MapView() {
       {mapPick && (
         <div
           role="status"
-          className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex items-center gap-3 rounded-md border border-danger bg-surface px-3 py-2 text-xs text-text-muted shadow-md lg:inset-x-auto lg:bottom-auto lg:left-3 lg:top-20 lg:max-w-sm"
+          className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex items-center gap-3 rounded-md border border-danger bg-surface px-3 py-2 text-xs text-text-muted shadow-md lg:inset-x-auto lg:bottom-auto lg:left-3 lg:top-36 lg:max-w-sm"
         >
           <span className="flex-1">
             {mapPick.mode === "verplaatsen"
