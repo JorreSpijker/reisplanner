@@ -1,26 +1,106 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Design tokens — "professional" (typeui.sh)
+ * Zie .claude/skills/design-system/SKILL.md
+ *
+ * Toegankelijkheid: primary (#FECE14) haalt op wit slechts ~1.6:1 en mag
+ * daarom nooit als tekst- of icoonkleur gebruikt worden. Alleen als vlak,
+ * met --color-on-primary (#111827, ~12:1) als tekst erop.
+ */
+
+@theme {
+  /* Merk */
+  --color-primary: #fece14;
+  --color-primary-hover: #e8bc0a;
+  --color-on-primary: #111827;
+  --color-secondary: #000000;
+
+  /* Status */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  /* Oppervlak en tekst */
+  --color-surface: #ffffff;
+  --color-surface-raised: #f9fafb;
+  --color-surface-sunken: #f3f4f6;
+  --color-text: #111827;
+  --color-text-muted: #4b5563;
+  --color-text-subtle: #6b7280;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+
+  /* Spacing-ritme 4/8/12/16/24/32 */
+  --spacing: 4px;
+
+  /* Typografie */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
+
+  /* Mobile-first compacte schaal */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  body {
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  /* Focus altijd zichtbaar — WCAG 2.2 AA, keyboard-first */
+  :focus-visible {
+    outline: 2px solid var(--color-secondary);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * Opmaak binnen het notitieveld. Tailwind zet lijsten en kopjes standaard plat;
+ * in een editor moet je juist zien wat je maakt.
+ */
+@layer components {
+  .prose-notities :is(h3) {
+    font-size: var(--text-base);
+    font-weight: 600;
+    margin-block: 0.5em 0.25em;
+  }
+
+  .prose-notities :is(ul, ol) {
+    padding-inline-start: 1.25em;
+    margin-block: 0.25em;
+  }
+
+  .prose-notities ul {
+    list-style: disc;
+  }
+
+  .prose-notities ol {
+    list-style: decimal;
+  }
+
+  .prose-notities p {
+    margin-block: 0.25em;
+  }
+
+  .prose-notities strong {
+    font-weight: 600;
+  }
 }
