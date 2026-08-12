@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/lib/auth/session";
+import {
+  MAX_GPX_BYTES,
+  deelGpx,
+  formatteerBestandsgrootte,
+  parseGpx,
+} from "@/lib/gpx";
 import { useFavorites, useTripStore } from "@/lib/store";
 import type { Activity } from "@/lib/types";
+import { ConfirmDialog } from "./confirm-dialog";
+import { ExternalLinkIcon } from "./external-link-icon";
 import { MapPinIcon } from "./map-pin-icon";
+import { PencilIcon } from "./pencil-icon";
 import { PlaceSearch } from "./place-search";
 import { RichText } from "./rich-text";
+import { StarIcon } from "./star-icon";
+import { Tooltip } from "./tooltip";
+import { TrashIcon } from "./trash-icon";
 
 /**
  * Derde kolom: alles van het geopende dagdeel — titel, tijd, locatie en
@@ -47,6 +59,8 @@ export function ActivityPanel({ activity }: { activity: Activity }) {
 
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
         <ActivityLocationBlock activity={activity} />
+
+        <ActivityGpx activity={activity} />
 
         <div className="flex flex-col gap-1.5">
           <h3 className="text-sm font-medium">Notitie</h3>
@@ -121,6 +135,7 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
   const mapPick = useTripStore((state) => state.mapPick);
   const setMapPick = useTripStore((state) => state.setMapPick);
   const setMobileTab = useTripStore((state) => state.setMobileTab);
+  const [vraagtVerwijderen, setVraagtVerwijderen] = useState(false);
   const { location } = activity;
 
   // Dezelfde coördinaten betekent dezelfde plek; de naam mag afwijken.
@@ -166,7 +181,7 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
       }`}
     >
       <MapPinIcon />
-      {kiest ? "Annuleren" : location ? "Verplaats op kaart" : "Kies op kaart"}
+      {kiest ? "Annuleren" : "Kies op kaart"}
     </button>
   );
 
@@ -192,49 +207,207 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">Locatie</h3>
-      <div className="flex flex-col items-start gap-2 rounded-md border border-border px-3 py-2">
-        <div>
-          <p className="text-sm">{location.name}</p>
-          <p className="font-mono text-xs text-text-subtle">
-            {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
-          </p>
-        </div>
+      <div>
+        <p className="text-sm">{location.name}</p>
+        <p className="font-mono text-xs text-text-subtle">
+          {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+        </p>
+      </div>
 
-        <div className="flex flex-wrap gap-2">
-          {kiesKnop}
+      {/* Eén groep: alles wat je met deze plek kunt doen, in volgorde van hoe
+          vaak je het doet. Verwijderen staat apart, achteraan. */}
+      <div className="flex w-fit items-stretch divide-x divide-border-strong rounded-md border border-border-strong">
+        <Tooltip label={kiest ? "Annuleren" : "Verplaats op kaart"}>
+          <button
+            type="button"
+            onClick={handleKies}
+            aria-pressed={kiest}
+            aria-label={kiest ? "Verplaatsen annuleren" : "Verplaats op kaart"}
+            className={`flex items-center rounded-l-md px-3 py-2 transition-colors ${
+              kiest ? "bg-primary text-on-primary" : "hover:bg-surface-sunken"
+            }`}
+          >
+            <MapPinIcon />
+          </button>
+        </Tooltip>
 
-          {/* Coördinaten en niet de naam: die wijst Google altijd op de plek
-              aan die hier op de kaart staat. */}
+        {/* Coördinaten en niet de naam: die wijst Google altijd op de plek
+            aan die hier op de kaart staat. */}
+        <Tooltip label="Open in Google Maps">
           <a
             href={`https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex shrink-0 items-center gap-2 self-start rounded-md border border-border-strong px-3 py-2 text-sm transition-colors hover:bg-surface-sunken"
+            aria-label="Open in Google Maps"
+            className="flex items-center px-3 py-2 transition-colors hover:bg-surface-sunken"
           >
-            <MapPinIcon />
-            Open in Google Maps
+            <ExternalLinkIcon />
           </a>
+        </Tooltip>
 
+        <Tooltip label={alFavoriet ? "Staat al in favorieten" : "Favoriet maken"}>
           <button
             type="button"
             onClick={handleFavoriet}
             disabled={alFavoriet}
-            className="flex shrink-0 items-center gap-2 self-start rounded-md border border-border-strong px-3 py-2 text-sm transition-colors hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={alFavoriet ? "Staat al in favorieten" : "Favoriet maken"}
+            // Zonder pointer-events-none slikt de uitgezette knop de hover op
+            // en blijft de tooltip weg.
+            className="flex items-center px-3 py-2 transition-colors hover:bg-surface-sunken disabled:pointer-events-none disabled:opacity-50"
           >
-            {alFavoriet ? "Staat in favorieten" : "Favoriet maken"}
+            <StarIcon filled={alFavoriet} />
           </button>
-        </div>
+        </Tooltip>
 
+        <Tooltip label="Locatie verwijderen">
+          <button
+            type="button"
+            onClick={() => setVraagtVerwijderen(true)}
+            aria-label="Locatie verwijderen"
+            className="flex items-center rounded-r-md px-3 py-2 text-text-subtle transition-colors hover:bg-surface-sunken hover:text-danger"
+          >
+            <TrashIcon />
+          </button>
+        </Tooltip>
+      </div>
+
+      {vraagtVerwijderen && (
+        <ConfirmDialog
+          title="Locatie verwijderen?"
+          description={`${location.name} verdwijnt van de kaart en uit de route van deze dag. Het dagdeel zelf blijft staan.`}
+          confirmLabel="Verwijderen"
+          onCancel={() => setVraagtVerwijderen(false)}
+          onConfirm={() => {
+            setVraagtVerwijderen(false);
+            if (user) void saveActivity(user.id, { ...activity, location: null });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * De GPX-track bij dit dagdeel: de wandeling of rit zelf. Hij komt groen op de
+ * kaart te staan en gaat met "Openen in Organic Maps" naar een kaart-app die
+ * hem offline kan navigeren.
+ */
+function ActivityGpx({ activity }: { activity: Activity }) {
+  const { user } = useSession();
+  const saveActivity = useTripStore((state) => state.saveActivity);
+  const invoer = useRef<HTMLInputElement>(null);
+  const [melding, setMelding] = useState<string | null>(null);
+  const { gpx } = activity;
+
+  async function handleBestand(event: React.ChangeEvent<HTMLInputElement>) {
+    const bestand = event.target.files?.[0];
+    // Zodat hetzelfde bestand nog eens kiezen opnieuw werkt.
+    event.target.value = "";
+    if (!bestand || !user) return;
+
+    setMelding(null);
+
+    if (bestand.size > MAX_GPX_BYTES) {
+      setMelding(
+        `Dit bestand is ${formatteerBestandsgrootte(bestand.size)}; ${formatteerBestandsgrootte(MAX_GPX_BYTES)} is het maximum. Dun de track eerst uit.`,
+      );
+      return;
+    }
+
+    const xml = await bestand.text();
+    if (!parseGpx(xml)) {
+      setMelding("In dit bestand staat geen track of route.");
+      return;
+    }
+
+    await saveActivity(user.id, {
+      ...activity,
+      gpx: { name: bestand.name, xml },
+    });
+  }
+
+  async function handleOpenen() {
+    if (!gpx) return;
+    const resultaat = await deelGpx(gpx);
+    setMelding(
+      resultaat === "gedownload"
+        ? "Bestand gedownload. Open het met Organic Maps."
+        : null,
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-medium">Track (GPX)</h3>
+
+      {gpx ? (
+        <>
+          <div>
+            <p className="truncate text-sm">{gpx.name}</p>
+            <p className="font-mono text-xs text-text-subtle">
+              {formatteerBestandsgrootte(new Blob([gpx.xml]).size)}
+            </p>
+          </div>
+
+          <div className="flex w-fit items-stretch divide-x divide-border-strong rounded-md border border-border-strong">
+            <button
+              type="button"
+              onClick={handleOpenen}
+              className="rounded-l-md px-3 py-2 text-sm transition-colors hover:bg-surface-sunken"
+            >
+              Openen in Organic Maps
+            </button>
+
+            <Tooltip label="Vervangen">
+              <button
+                type="button"
+                onClick={() => invoer.current?.click()}
+                aria-label="Track vervangen"
+                className="flex items-center px-3 py-2 text-text-subtle transition-colors hover:bg-surface-sunken hover:text-text"
+              >
+                <PencilIcon />
+              </button>
+            </Tooltip>
+
+            <Tooltip label="Track verwijderen">
+              <button
+                type="button"
+                onClick={() =>
+                  user && void saveActivity(user.id, { ...activity, gpx: null })
+                }
+                aria-label="Track verwijderen"
+                className="flex items-center rounded-r-md px-3 py-2 text-text-subtle transition-colors hover:bg-surface-sunken hover:text-danger"
+              >
+                <TrashIcon />
+              </button>
+            </Tooltip>
+          </div>
+        </>
+      ) : (
         <button
           type="button"
-          onClick={() => user && saveActivity(user.id, { ...activity, location: null })}
-          className="rounded-sm text-xs text-text-subtle hover:text-danger"
+          onClick={() => invoer.current?.click()}
+          className="w-fit rounded-md border border-border-strong px-3 py-2 text-sm transition-colors hover:bg-surface-sunken"
         >
-          Locatie verwijderen
+          GPX toevoegen
         </button>
-      </div>
+      )}
+
+      <input
+        ref={invoer}
+        type="file"
+        accept=".gpx,application/gpx+xml"
+        onChange={handleBestand}
+        className="hidden"
+      />
+
+      {melding && (
+        <p role="status" className="text-xs text-text-muted">
+          {melding}
+        </p>
+      )}
     </div>
   );
 }

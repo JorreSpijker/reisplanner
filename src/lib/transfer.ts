@@ -5,7 +5,7 @@ import type { TripData } from "@/lib/types";
  * over een half jaar terugvindt nog te lezen is, ook als het model intussen is
  * gewijzigd.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export type TripFile = {
   schemaVersion: number;

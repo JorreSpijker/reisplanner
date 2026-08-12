@@ -28,6 +28,12 @@ export interface TripRepository {
 
   saveDay(userId: string, day: Day): Promise<Day>;
 
+  /**
+   * Zet de dagen in een andere volgorde; `dayIds` staat in de nieuwe volgorde.
+   * De datums van de reis blijven staan, de dagen schuiven erlangs.
+   */
+  reorderDays(userId: string, dayIds: string[]): Promise<TripData>;
+
   saveActivity(userId: string, activity: Activity): Promise<Activity>;
   deleteActivity(userId: string, activityId: string): Promise<void>;
   /** Herordent dagdelen binnen één dag; `activityIds` staat in de nieuwe volgorde. */

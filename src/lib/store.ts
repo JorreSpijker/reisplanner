@@ -1,6 +1,8 @@
+import type { MultiLineString } from "geojson";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { shiftDate } from "@/lib/dates";
+import { gpxTrack } from "@/lib/gpx";
 import { getRepository } from "@/lib/repository";
 import type { MergeResult } from "@/lib/repository/merge";
 import { routeKey, straightLineRoute, type DayRoute } from "@/lib/route";
@@ -62,6 +64,11 @@ type TripState = {
   setActiveDay: (dayId: string) => void;
   /** Rekt de reis één dag op, vóór de eerste of na de laatste dag. */
   addDay: (userId: string, kant: "voor" | "na") => Promise<void>;
+  /**
+   * Zet de dagen in een andere volgorde; `dayIds` staat in de nieuwe volgorde.
+   * De datums blijven van de reis, de dagen schuiven er met hun planning langs.
+   */
+  reorderDays: (userId: string, dayIds: string[]) => Promise<void>;
   setHoveredActivity: (activityId: string | null) => void;
   setMapPick: (pick: MapPick | null) => void;
   setSelectedActivity: (activityId: string | null) => void;
@@ -203,6 +210,12 @@ export const useTripStore = create<TripState>((set, get) => ({
     });
   },
 
+  reorderDays: async (userId, dayIds) => {
+    // De actieve dag blijft dezelfde dag: hij staat alleen op een andere plek
+    // in de reis, met zijn planning erbij.
+    set({ data: await repository.reorderDays(userId, dayIds) });
+  },
+
   setHoveredActivity: (activityId) => set({ hoveredActivityId: activityId }),
   setMapPick: (pick) => set({ mapPick: pick }),
   setSelectedActivity: (activityId) => set({ selectedActivityId: activityId }),
@@ -220,6 +233,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       title: input.title,
       notes: "",
       location: input.location ?? null,
+      gpx: null,
       order,
       updatedAt: new Date().toISOString(),
       deletedAt: null,
@@ -504,6 +518,23 @@ export function useActiveDayStay(): Favorite | null {
     .find((day) => day.stayFavoriteId !== null)?.stayFavoriteId;
 
   return data.favorites.find((favorite) => favorite.id === keuze) ?? null;
+}
+
+/** GPX-tracks van de dagdelen van de actieve dag, op volgorde van de planning. */
+export function useActiveDayTracks(): { id: string; track: MultiLineString }[] {
+  const data = useTripStore((state) => state.data);
+  const activeDayId = useTripStore((state) => state.activeDayId);
+  if (!data || !activeDayId) return [];
+
+  return data.activities
+    .filter((activity) => activity.dayId === activeDayId && activity.gpx !== null)
+    .sort((a, b) => a.order - b.order)
+    .flatMap((activity) => {
+      const track = activity.gpx && gpxTrack(activity.id, activity.gpx);
+      // Een bestand zonder track valt hier weg; de gebruiker kreeg dat al te
+      // horen bij het uploaden.
+      return track ? [{ id: activity.id, track }] : [];
+    });
 }
 
 /**

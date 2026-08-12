@@ -40,7 +40,11 @@ export function normalize(data: TripData): TripData {
       startAtStay: day.startAtStay ?? true,
       endAtStay: day.endAtStay ?? true,
     })),
-    activities: activities.map(withTombstone),
+    // Dagdelen van vóór de GPX-tracks hebben het veld nog niet.
+    activities: activities.map((activity) => ({
+      ...withTombstone(activity),
+      gpx: activity.gpx ?? null,
+    })),
     favorites: (data.favorites ?? []).map(withTombstone),
     // Bewaarde routes van vóór de dagdelen horen bij stops die er niet meer
     // zijn; ze zouden toch nooit meer op de huidige sleutel passen.
@@ -185,6 +189,36 @@ export function upsertDay(data: TripData, day: Day): { data: TripData; saved: Da
     },
     saved,
   };
+}
+
+/**
+ * Zet de dagen in een andere volgorde. De datums blijven waar ze zijn — de reis
+ * duurt even lang en begint op dezelfde dag — en het zijn de dagen zelf die
+ * erlangs schuiven. Alles wat aan een dag hangt (dagdelen, notitie,
+ * verblijfplaats) verhuist dus mee, want dat hangt aan het record en niet aan
+ * de datum.
+ */
+export function reorderDays(data: TripData, dayIds: string[]): TripData {
+  const timestamp = now();
+  const datums = data.days
+    .filter((day) => !day.deletedAt)
+    .map((day) => day.date)
+    .sort((a, b) => a.localeCompare(b));
+
+  const nieuweDatum = new Map(dayIds.map((id, index) => [id, datums[index]]));
+
+  const days = data.days
+    .map<Day>((day) => {
+      const datum = nieuweDatum.get(day.id);
+      return datum === undefined || datum === day.date
+        ? day
+        : { ...day, date: datum, updatedAt: timestamp };
+    })
+    // De rest van de app leest de volgorde uit deze lijst; die moet dus weer
+    // op datum staan.
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return { ...data, days };
 }
 
 export function upsertFavorite(

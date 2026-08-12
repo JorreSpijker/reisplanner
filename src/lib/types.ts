@@ -64,6 +64,18 @@ export type Favorite = Verwijderbaar & {
   updatedAt: string;
 };
 
+/**
+ * Aan een dagdeel gehangen GPX-bestand: de wandeling of fietsrit die je daar
+ * doet. De inhoud gaat als tekst mee in de reisdata, zodat de track ook op je
+ * telefoon staat na een export en import.
+ */
+export type GpxFile = {
+  /** Bestandsnaam zoals geüpload; ook de naam waaronder hij gedeeld wordt. */
+  name: string;
+  /** De ruwe inhoud van het bestand. */
+  xml: string;
+};
+
 /** Plek op de kaart, hoort bij één dagdeel. */
 export type ActivityLocation = {
   name: string;
@@ -89,6 +101,8 @@ export type Activity = Verwijderbaar & {
   notes: string;
   /** Null als het dagdeel geen plek op de kaart heeft. */
   location: ActivityLocation | null;
+  /** Null als er geen GPX-track bij dit dagdeel hoort. */
+  gpx: GpxFile | null;
   /** Positie binnen de dag, oplopend vanaf 0 */
   order: number;
   updatedAt: string;

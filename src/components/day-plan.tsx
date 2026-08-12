@@ -31,9 +31,11 @@ import {
   useActiveDayStay,
   useActiveDayStayRoute,
   useDayActivities,
+  useFavorites,
   useTripStore,
 } from "@/lib/store";
 import type { Activity, Day, Favorite } from "@/lib/types";
+import { Collapsible } from "./collapsible";
 import { Favorites } from "./favorites";
 import { MoveActivities } from "./move-activities";
 import { RichText } from "./rich-text";
@@ -47,6 +49,7 @@ import { RichText } from "./rich-text";
 export function DayPlan({ day }: { day: Day }) {
   const { user } = useSession();
   const activities = useDayActivities(day.id);
+  const favorites = useFavorites();
   const reorderActivities = useTripStore((state) => state.reorderActivities);
   const addActivity = useTripStore((state) => state.addActivity);
   // Een favoriet komt uit de strip erboven en mag dus buiten de lijst beginnen;
@@ -107,18 +110,29 @@ export function DayPlan({ day }: { day: Day }) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <section className="flex flex-col gap-5">
+      <section className="flex flex-1 flex-col gap-6">
         <Planning day={day} userId={user?.id} />
 
-        <Favorites day={day} />
-
-        <div className="flex flex-col gap-1.5 border-t border-border pt-4">
-          <h3 className="text-sm font-medium">Notitie bij deze dag</h3>
-          <DayNote day={day} />
+        <div className="flex flex-col">
+          <MoveActivities day={day} />
         </div>
 
-        <div className="flex flex-col border-t border-border pt-4">
-          <MoveActivities day={day} />
+        {/* Bijzaken: dicht tenzij je ze nodig hebt, en onderaan de kolom zodat
+            de dagplanning bovenaan bij elkaar blijft staan. */}
+        <div className="mt-auto border-t border-border">
+          <Collapsible
+            title="Favorieten"
+            hint={favorites.length > 0 ? String(favorites.length) : "geen"}
+          >
+            <Favorites day={day} />
+          </Collapsible>
+
+          <Collapsible
+            title="Notitie bij deze dag"
+            hint={day.notes ? "ingevuld" : "leeg"}
+          >
+            <DayNote day={day} />
+          </Collapsible>
         </div>
       </section>
     </DndContext>
@@ -157,7 +171,7 @@ function Planning({ day, userId }: { day: Day; userId?: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium">Dagplanning</h2>
+      <h2 className="font-display text-base font-semibold">Dagplanning</h2>
 
       {/*
         Per dag: begint en eindigt hij bij het verblijf. Op een doorreisdag
