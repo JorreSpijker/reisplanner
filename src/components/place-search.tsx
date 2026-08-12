@@ -101,7 +101,7 @@ export function PlaceSearch({
           value={query}
           onChange={(event) => handleChange(event.target.value)}
           placeholder={placeholder}
-          className="rounded-md border border-border-strong px-3 py-2 text-base placeholder:text-text-subtle"
+          className="rounded-md border border-border-strong px-3 py-2 text-base placeholder:text-text-subtle pointer-coarse:min-h-11"
         />
       </label>
 
@@ -123,7 +123,7 @@ export function PlaceSearch({
               <button
                 type="button"
                 onClick={() => handlePick(place)}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-surface-sunken"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-surface-sunken pointer-coarse:min-h-11"
               >
                 {place.label}
               </button>

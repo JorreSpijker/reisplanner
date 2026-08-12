@@ -110,7 +110,7 @@ function Toolbar({ editor }: { editor: Editor }) {
           // gebruiker zijn cursorpositie.
           onMouseDown={(event) => event.preventDefault()}
           onClick={button.run}
-          className={`min-w-7 rounded-sm px-1.5 py-0.5 text-xs hover:bg-surface-sunken ${
+          className={`min-w-7 rounded-sm px-1.5 py-0.5 text-xs hover:bg-surface-sunken pointer-coarse:min-h-11 pointer-coarse:min-w-11 ${
             button.className
           } ${button.isActive ? "bg-primary text-on-primary hover:bg-primary-hover" : ""}`}
         >

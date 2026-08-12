@@ -137,14 +137,14 @@ export function TripTransfer() {
         <button
           type="button"
           onClick={handleExport}
-          className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken"
+          className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken pointer-coarse:min-h-11 pointer-coarse:px-3"
         >
           Exporteren
         </button>
         <button
           type="button"
           onClick={() => invoer.current?.click()}
-          className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken"
+          className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken pointer-coarse:min-h-11 pointer-coarse:px-3"
         >
           Importeren
         </button>
@@ -201,14 +201,14 @@ export function TripTransfer() {
               type="button"
               onClick={bevestig}
               disabled={bezig}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary hover:bg-primary-hover disabled:opacity-50"
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary hover:bg-primary-hover disabled:opacity-50 pointer-coarse:min-h-11"
             >
               {bezig ? "Bezig…" : "Toepassen"}
             </button>
             <button
               type="button"
               onClick={() => setVoorstel(null)}
-              className="rounded-md border border-border-strong px-3 py-1.5 text-xs font-medium hover:bg-surface-sunken"
+              className="rounded-md border border-border-strong px-3 py-1.5 text-xs font-medium hover:bg-surface-sunken pointer-coarse:min-h-11"
             >
               Annuleren
             </button>

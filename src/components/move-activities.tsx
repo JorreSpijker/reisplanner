@@ -74,7 +74,7 @@ export function MoveActivities({ day }: { day: Day }) {
       <button
         type="button"
         onClick={openPanel}
-        className="self-start rounded-md border border-border-strong px-3 py-1.5 text-sm hover:bg-surface-sunken"
+        className="self-start rounded-md border border-border-strong px-3 py-1.5 text-sm hover:bg-surface-sunken pointer-coarse:min-h-11"
       >
         Verplaatsen naar andere dag
       </button>
@@ -89,11 +89,12 @@ export function MoveActivities({ day }: { day: Day }) {
         <ul className="flex flex-col gap-1">
           {activities.map((activity) => (
             <li key={activity.id}>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex items-center gap-2 text-sm pointer-coarse:min-h-11">
                 <input
                   type="checkbox"
                   checked={selected.includes(activity.id)}
                   onChange={() => toggle(activity.id)}
+                  className="size-4"
                 />
                 <span className="shrink-0 font-mono text-xs text-text-muted">
                   {activity.time || "—"}
@@ -106,11 +107,12 @@ export function MoveActivities({ day }: { day: Day }) {
       )}
 
       {day.notes && (
-        <label className="flex items-center gap-2 border-t border-border pt-2 text-sm">
+        <label className="flex items-center gap-2 border-t border-border pt-2 text-sm pointer-coarse:min-h-11">
           <input
             type="checkbox"
             checked={withNotes}
             onChange={(event) => setWithNotes(event.target.checked)}
+            className="size-4"
           />
           Notitie bij deze dag
         </label>
@@ -121,7 +123,7 @@ export function MoveActivities({ day }: { day: Day }) {
         <select
           value={targetDayId}
           onChange={(event) => setTargetDayId(event.target.value)}
-          className="rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm"
+          className="rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm pointer-coarse:min-h-11"
         >
           {andereDagen.map((kandidaat) => (
             <option key={kandidaat.id} value={kandidaat.id}>
@@ -145,14 +147,14 @@ export function MoveActivities({ day }: { day: Day }) {
           type="button"
           onClick={handleMove}
           disabled={!kanVerplaatsen}
-          className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:min-h-11"
         >
           {botsingen.length > 0 ? "Toch verplaatsen" : "Verplaatsen"}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-md border border-border-strong px-3 py-1.5 text-sm hover:bg-surface-sunken"
+          className="rounded-md border border-border-strong px-3 py-1.5 text-sm hover:bg-surface-sunken pointer-coarse:min-h-11"
         >
           Annuleren
         </button>

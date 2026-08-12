@@ -20,6 +20,12 @@ import { StarIcon } from "./star-icon";
 import { Tooltip } from "./tooltip";
 import { TrashIcon } from "./trash-icon";
 
+/** Een knop in een icoongroep: alleen het icoon, met de duim ook het woord. */
+const KNOP_IN_GROEP =
+  "flex items-center px-3 py-2 transition-colors pointer-coarse:min-h-11 pointer-coarse:flex-col pointer-coarse:justify-center pointer-coarse:gap-0.5 pointer-coarse:px-2.5";
+
+const KNOPLABEL = "hidden text-xs leading-none pointer-coarse:block";
+
 /**
  * Derde kolom: alles van het geopende dagdeel — titel, tijd, locatie en
  * notitie. Verschijnt pas zodra er een dagdeel gekozen is en verdwijnt weer met
@@ -51,7 +57,7 @@ export function ActivityPanel({ activity }: { activity: Activity }) {
           type="button"
           onClick={handleClose}
           aria-label="Dagdeel sluiten"
-          className="shrink-0 rounded-sm px-2 py-1 text-sm text-text-subtle hover:text-text"
+          className="flex shrink-0 items-center justify-center rounded-sm px-2 py-1 text-sm text-text-subtle hover:text-text pointer-coarse:size-11"
         >
           ×
         </button>
@@ -174,7 +180,7 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
       type="button"
       onClick={handleKies}
       aria-pressed={kiest}
-      className={`flex shrink-0 items-center gap-2 self-start rounded-md border px-3 py-2 text-sm transition-colors ${
+      className={`flex shrink-0 items-center gap-2 self-start rounded-md border px-3 py-2 text-sm transition-colors pointer-coarse:min-h-11 ${
         kiest
           ? "border-danger bg-surface-raised font-medium"
           : "border-border-strong hover:bg-surface-sunken"
@@ -217,7 +223,11 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
       </div>
 
       {/* Eén groep: alles wat je met deze plek kunt doen, in volgorde van hoe
-          vaak je het doet. Verwijderen staat apart, achteraan. */}
+          vaak je het doet. Verwijderen staat apart, achteraan.
+
+          Op een aanraakscherm staat het woord onder het icoon: de tooltip
+          hangt aan hover en die bestaat daar niet, dus zou er alleen een
+          plaatje overblijven. */}
       <div className="flex w-fit items-stretch divide-x divide-border-strong rounded-md border border-border-strong">
         <Tooltip label={kiest ? "Annuleren" : "Verplaats op kaart"}>
           <button
@@ -225,11 +235,12 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
             onClick={handleKies}
             aria-pressed={kiest}
             aria-label={kiest ? "Verplaatsen annuleren" : "Verplaats op kaart"}
-            className={`flex items-center rounded-l-md px-3 py-2 transition-colors ${
+            className={`${KNOP_IN_GROEP} rounded-l-md ${
               kiest ? "bg-primary text-on-primary" : "hover:bg-surface-sunken"
             }`}
           >
             <MapPinIcon />
+            <span className={KNOPLABEL}>{kiest ? "Annuleren" : "Verplaats"}</span>
           </button>
         </Tooltip>
 
@@ -241,9 +252,10 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Open in Google Maps"
-            className="flex items-center px-3 py-2 transition-colors hover:bg-surface-sunken"
+            className={`${KNOP_IN_GROEP} hover:bg-surface-sunken`}
           >
             <ExternalLinkIcon />
+            <span className={KNOPLABEL}>Maps</span>
           </a>
         </Tooltip>
 
@@ -255,9 +267,10 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
             aria-label={alFavoriet ? "Staat al in favorieten" : "Favoriet maken"}
             // Zonder pointer-events-none slikt de uitgezette knop de hover op
             // en blijft de tooltip weg.
-            className="flex items-center px-3 py-2 transition-colors hover:bg-surface-sunken disabled:pointer-events-none disabled:opacity-50"
+            className={`${KNOP_IN_GROEP} hover:bg-surface-sunken disabled:pointer-events-none disabled:opacity-50`}
           >
             <StarIcon filled={alFavoriet} />
+            <span className={KNOPLABEL}>Favoriet</span>
           </button>
         </Tooltip>
 
@@ -266,9 +279,10 @@ function ActivityLocationBlock({ activity }: { activity: Activity }) {
             type="button"
             onClick={() => setVraagtVerwijderen(true)}
             aria-label="Locatie verwijderen"
-            className="flex items-center rounded-r-md px-3 py-2 text-text-subtle transition-colors hover:bg-surface-sunken hover:text-danger"
+            className={`${KNOP_IN_GROEP} rounded-r-md text-text-subtle hover:bg-surface-sunken hover:text-danger`}
           >
             <TrashIcon />
+            <span className={KNOPLABEL}>Wissen</span>
           </button>
         </Tooltip>
       </div>
@@ -355,7 +369,7 @@ function ActivityGpx({ activity }: { activity: Activity }) {
             <button
               type="button"
               onClick={handleOpenen}
-              className="rounded-l-md px-3 py-2 text-sm transition-colors hover:bg-surface-sunken"
+              className="rounded-l-md px-3 py-2 text-sm transition-colors hover:bg-surface-sunken pointer-coarse:min-h-11"
             >
               Openen in Organic Maps
             </button>
@@ -365,9 +379,10 @@ function ActivityGpx({ activity }: { activity: Activity }) {
                 type="button"
                 onClick={() => invoer.current?.click()}
                 aria-label="Track vervangen"
-                className="flex items-center px-3 py-2 text-text-subtle transition-colors hover:bg-surface-sunken hover:text-text"
+                className={`${KNOP_IN_GROEP} text-text-subtle hover:bg-surface-sunken hover:text-text`}
               >
                 <PencilIcon />
+                <span className={KNOPLABEL}>Vervang</span>
               </button>
             </Tooltip>
 
@@ -378,9 +393,10 @@ function ActivityGpx({ activity }: { activity: Activity }) {
                   user && void saveActivity(user.id, { ...activity, gpx: null })
                 }
                 aria-label="Track verwijderen"
-                className="flex items-center rounded-r-md px-3 py-2 text-text-subtle transition-colors hover:bg-surface-sunken hover:text-danger"
+                className={`${KNOP_IN_GROEP} rounded-r-md text-text-subtle hover:bg-surface-sunken hover:text-danger`}
               >
                 <TrashIcon />
+                <span className={KNOPLABEL}>Wissen</span>
               </button>
             </Tooltip>
           </div>
@@ -389,7 +405,7 @@ function ActivityGpx({ activity }: { activity: Activity }) {
         <button
           type="button"
           onClick={() => invoer.current?.click()}
-          className="w-fit rounded-md border border-border-strong px-3 py-2 text-sm transition-colors hover:bg-surface-sunken"
+          className="w-fit rounded-md border border-border-strong px-3 py-2 text-sm transition-colors hover:bg-surface-sunken pointer-coarse:min-h-11"
         >
           GPX toevoegen
         </button>

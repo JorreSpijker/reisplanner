@@ -65,7 +65,7 @@ export function OfflineMapPanel() {
           type="button"
           onClick={() => invoer.current?.click()}
           disabled={bezig}
-          className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken disabled:opacity-50"
+          className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken disabled:opacity-50 pointer-coarse:min-h-11 pointer-coarse:px-3"
         >
           {bezig ? "Bezig…" : grootte === null ? "Kaart laden" : "Vervangen"}
         </button>
@@ -74,7 +74,7 @@ export function OfflineMapPanel() {
           <button
             type="button"
             onClick={handleVerwijderen}
-            className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken"
+            className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium hover:bg-surface-sunken pointer-coarse:min-h-11 pointer-coarse:px-3"
           >
             Verwijderen
           </button>

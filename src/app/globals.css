@@ -73,6 +73,45 @@
 }
 
 /*
+ * Wie beweging heeft uitgezet, krijgt geen overgang meer. De toestanden zelf
+ * blijven: de marker die je verplaatst is ook zonder pulseren te herkennen aan
+ * zijn rode rand en grotere formaat.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Safari op iOS zoomt in zodra een invoerveld met een letter kleiner dan 16px
+ * focus krijgt, en zoomt daarna niet terug. De compacte schaal geldt dus alleen
+ * voor de rest van de interface; wat je aanraakt om in te typen niet.
+ *
+ * Buiten `@layer`, want anders winnen de `text-sm`-utilities op de velden zelf.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea,
+  [contenteditable="true"] {
+    font-size: 16px;
+  }
+
+  /* MapLibre levert zijn eigen knoppen van 29px; die vallen buiten de
+     `pointer-coarse:`-varianten op onze eigen componenten. */
+  .maplibregl-ctrl button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/*
  * Opmaak binnen het notitieveld. Tailwind zet lijsten en kopjes standaard plat;
  * in een editor moet je juist zien wat je maakt.
  */

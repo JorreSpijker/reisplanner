@@ -1,4 +1,4 @@
-/** Prullenbak. Verwijdert de locatie van een dagdeel. */
+/** Prullenbak. Staat overal waar iets verdwijnt; `×` is voorbehouden aan sluiten. */
 export function TrashIcon({ className }: { className?: string }) {
   return (
     <svg

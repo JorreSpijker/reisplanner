@@ -18,6 +18,18 @@ export function shiftDate(date: string, days: number): string {
   return cursor.toISOString().slice(0, 10);
 }
 
+/**
+ * Vandaag als ISO-datum, in de tijdzone van het toestel. Niet via `toISOString`:
+ * die rekent in UTC en zou in Nederland tussen middernacht en twee uur 's
+ * nachts nog gisteren teruggeven.
+ */
+export function todayIso(): string {
+  const nu = new Date();
+  const maand = String(nu.getMonth() + 1).padStart(2, "0");
+  const dag = String(nu.getDate()).padStart(2, "0");
+  return `${nu.getFullYear()}-${maand}-${dag}`;
+}
+
 /** "ma 12 mei" — voor de dag-selector. */
 export function formatDayLabel(date: string): string {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString("nl-NL", {

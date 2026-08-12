@@ -249,7 +249,9 @@ export function MapView() {
           />
         </div>
 
-        <div className="w-72 min-w-0 rounded-b-md border border-t-0 border-border bg-surface px-3 py-2 shadow-md">
+        {/* Meegroeien tot 18rem en niet exact 18rem: naast het logo blijft er op
+            een smalle telefoon anders te weinig over voor het invoerveld. */}
+        <div className="w-full min-w-0 max-w-72 rounded-b-md border border-t-0 border-border bg-surface px-3 py-2 shadow-md">
           <PlaceSearch
             label="Zoek op de kaart"
             placeholder="Plaats, adres of “supermarkt”"
@@ -370,7 +372,11 @@ export function MapView() {
                 ? `Dagdeel ${index + 1}: ${place.title} — klik op de kaart voor de nieuwe plek, Escape annuleert`
                 : `Dagdeel ${index + 1}: ${place.title}`
             }
-            className={`flex size-7 items-center justify-center rounded-full border-2 text-xs font-semibold text-on-primary shadow-sm transition-transform ${
+            // Zelfde truc als het nummerbolletje in de dagplanning: de marker
+            // blijft 28px groot, het raakvlak eromheen wordt 44px. Een grotere
+            // marker zou de kaart eronder verstoppen. 2,5 en niet 2: `inset`
+            // rekent vanaf de padding-box, en daar gaat de rand van 2px af.
+            className={`relative flex size-7 items-center justify-center rounded-full border-2 text-xs font-semibold text-on-primary shadow-sm transition-transform pointer-coarse:before:absolute pointer-coarse:before:-inset-2.5 ${
               mapPick?.mode === "verplaatsen" && mapPick.activityId === place.id
                 ? "animate-pulse scale-125 border-danger bg-primary-hover"
                 : hoveredActivityId === place.id || selectedActivityId === place.id

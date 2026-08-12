@@ -6,8 +6,10 @@ import { useState } from "react";
 import { useSession } from "@/lib/auth/session";
 import { useActiveDayStay, useFavorites, useTripStore } from "@/lib/store";
 import type { Day, Favorite } from "@/lib/types";
+import { ConfirmDialog } from "./confirm-dialog";
 import { HomeIcon } from "./home-icon";
 import { PencilIcon } from "./pencil-icon";
+import { TrashIcon } from "./trash-icon";
 
 /**
  * Plekken die je vaker nodig hebt dan één dagdeel: het hotel, de supermarkt om
@@ -44,7 +46,7 @@ export function Favorites({ day }: { day: Day }) {
           type="button"
           onClick={handleNieuw}
           aria-pressed={kiest}
-          className={`shrink-0 rounded-md border px-2 py-1 text-xs transition-colors ${
+          className={`shrink-0 rounded-md border px-2 py-1 text-xs transition-colors pointer-coarse:min-h-11 pointer-coarse:px-3 ${
             kiest
               ? "border-danger bg-surface-raised font-medium"
               : "border-border-strong hover:bg-surface-sunken"
@@ -115,6 +117,9 @@ function FavoriteCard({
 
   const [bewerkt, setBewerkt] = useState(false);
   const [naam, setNaam] = useState(favorite.name);
+  // Een favoriet hangt aan de hele reis: hij weggooien raakt elke dag waar hij
+  // de verblijfplaats is.
+  const [vraagtVerwijderen, setVraagtVerwijderen] = useState(false);
 
   function bewaar() {
     setBewerkt(false);
@@ -141,7 +146,7 @@ function FavoriteCard({
         aria-pressed={isStay}
         aria-label={`${favorite.name} als verblijfplaats van deze dag`}
         title="Verblijfplaats van deze dag"
-        className={`shrink-0 rounded-sm p-1 transition-colors ${
+        className={`flex shrink-0 items-center justify-center rounded-sm p-1 transition-colors pointer-coarse:size-11 ${
           isStay ? "text-primary" : "text-text-subtle hover:text-text"
         }`}
       >
@@ -170,7 +175,7 @@ function FavoriteCard({
           {...attributes}
           {...listeners}
           aria-label={`${favorite.name} naar de dagplanning slepen`}
-          className="cursor-grab whitespace-nowrap px-1 text-sm active:cursor-grabbing"
+          className="cursor-grab whitespace-nowrap px-1 text-sm active:cursor-grabbing pointer-coarse:min-h-11"
         >
           {favorite.name}
         </button>
@@ -181,19 +186,32 @@ function FavoriteCard({
         onClick={() => setBewerkt(true)}
         aria-label={`${favorite.name} hernoemen`}
         title="Hernoemen"
-        className="shrink-0 rounded-sm p-1 text-text-subtle hover:text-text"
+        className="flex shrink-0 items-center justify-center rounded-sm p-1 text-text-subtle hover:text-text pointer-coarse:size-11"
       >
         <PencilIcon className="size-3.5" />
       </button>
 
       <button
         type="button"
-        onClick={onDelete}
+        onClick={() => setVraagtVerwijderen(true)}
         aria-label={`${favorite.name} uit favorieten verwijderen`}
-        className="shrink-0 rounded-sm px-1 text-sm text-text-subtle hover:text-danger"
+        className="flex shrink-0 items-center justify-center rounded-sm px-1 text-text-subtle hover:text-danger pointer-coarse:size-11"
       >
-        ×
+        <TrashIcon className="size-3.5" />
       </button>
+
+      {vraagtVerwijderen && (
+        <ConfirmDialog
+          title="Favoriet verwijderen?"
+          description={`${favorite.name} verdwijnt uit de hele reis, ook als hij op een dag je verblijfplaats is. Dagdelen die je er al mee gemaakt hebt blijven staan.`}
+          confirmLabel="Verwijderen"
+          onCancel={() => setVraagtVerwijderen(false)}
+          onConfirm={() => {
+            setVraagtVerwijderen(false);
+            onDelete();
+          }}
+        />
+      )}
     </li>
   );
 }

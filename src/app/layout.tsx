@@ -28,6 +28,9 @@ export const viewport: Viewport = {
   themeColor: "#fece14",
   // De app vult het scherm; inzoomen zou de tabbalk buiten beeld duwen.
   viewportFit: "cover",
+  // Het toetsenbord verkleint de layout in plaats van hem te bedekken: anders
+  // valt het invoerveld waar je in typt achter het toetsenbord.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -36,8 +39,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="nl"
       className={`${poppins.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
-      {/* Exact schermhoogte: zo blijft de tabbalk op mobiel altijd in beeld. */}
-      <body className="h-full overflow-hidden flex flex-col">
+      {/*
+        `dvh` en niet `h-full`: honderd procent rekent met het scherm alsof de
+        browserbalken ingeklapt zijn, waardoor de tabbalk erachter valt en er
+        door `overflow-hidden` niet meer bij te komen is.
+      */}
+      <body className="h-dvh overflow-hidden flex flex-col">
         <OfflineSupport />
         <SessionProvider>{children}</SessionProvider>
       </body>

@@ -1,7 +1,7 @@
 import type { MultiLineString } from "geojson";
 import { useEffect } from "react";
 import { create } from "zustand";
-import { shiftDate } from "@/lib/dates";
+import { shiftDate, todayIso } from "@/lib/dates";
 import { gpxTrack } from "@/lib/gpx";
 import { getRepository } from "@/lib/repository";
 import type { MergeResult } from "@/lib/repository/merge";
@@ -153,6 +153,18 @@ function waypoints(places: LocatedActivity[], stay: DayStay | null) {
   ];
 }
 
+/**
+ * De dag om mee te beginnen. Onderweg open je de app om te zien wat je vandaag
+ * doet, niet om de eerste reisdag terug te lezen. De dagen staan op datum, dus
+ * de eerste die niet vóór vandaag ligt is vandaag of de eerstvolgende reisdag;
+ * is de reis al voorbij, dan de laatste dag.
+ */
+function beginDag(days: Day[]): string | null {
+  if (days.length === 0) return null;
+  const vandaag = todayIso();
+  return (days.find((day) => day.date >= vandaag) ?? days[days.length - 1]).id;
+}
+
 export const useTripStore = create<TripState>((set, get) => ({
   data: null,
   status: "idle",
@@ -172,7 +184,7 @@ export const useTripStore = create<TripState>((set, get) => ({
       set({
         data,
         status: "ready",
-        activeDayId: data?.days[0]?.id ?? null,
+        activeDayId: data ? beginDag(data.days) : null,
       });
     } catch (cause) {
       // Zonder server is de browseropslag de enige kopie. Bij een leesfout een
@@ -184,12 +196,21 @@ export const useTripStore = create<TripState>((set, get) => ({
 
   createTrip: async (userId, input) => {
     const data = await repository.createTrip(userId, input);
-    set({ data, status: "ready", activeDayId: data.days[0]?.id ?? null });
+    set({ data, status: "ready", activeDayId: beginDag(data.days) });
   },
 
   // Een openstaande kaartkeuze hoort bij de dag waar je hem begon; bij het
-  // wisselen van dag vervalt hij.
-  setActiveDay: (dayId) => set({ activeDayId: dayId, mapPick: null }),
+  // wisselen van dag vervalt hij. Hetzelfde geldt voor het geopende dagdeel:
+  // dat hoort bij één dag, en zou anders in het dagdeelpaneel blijven staan
+  // terwijl de lijst en de kaart al een andere dag laten zien.
+  setActiveDay: (dayId) =>
+    set({
+      activeDayId: dayId,
+      mapPick: null,
+      selectedActivityId: null,
+      // Zonder dagdeel is dat tabblad leeg; terug naar de dag die je koos.
+      mobileTab: get().mobileTab === "dagdeel" ? "dag" : get().mobileTab,
+    }),
   addDay: async (userId, kant) => {
     const trip = get().data?.trip;
     if (!trip) return;

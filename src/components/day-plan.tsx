@@ -36,9 +36,11 @@ import {
 } from "@/lib/store";
 import type { Activity, Day, Favorite } from "@/lib/types";
 import { Collapsible } from "./collapsible";
+import { ConfirmDialog } from "./confirm-dialog";
 import { Favorites } from "./favorites";
 import { MoveActivities } from "./move-activities";
 import { RichText } from "./rich-text";
+import { TrashIcon } from "./trash-icon";
 
 /**
  * De planning van de dag: dagdelen en een notitie. Dit is de enige plek waar je
@@ -178,26 +180,37 @@ function Planning({ day, userId }: { day: Day; userId?: string }) {
         vertrek je er wel, maar kom je er niet terug.
       */}
       {verblijf && (
-        <div className="flex flex-col gap-1">
-          <label className="flex items-center gap-2 text-xs text-text-muted">
+        // De naam van het verblijf staat niet meer in de labels — die zouden
+        // naast elkaar niet passen — maar wel op de groep, zodat een schermlezer
+        // nog steeds hoort wélk verblijf bedoeld wordt.
+        <div
+          role="group"
+          aria-label={`Verblijf van deze dag: ${verblijf.name}`}
+          className="flex flex-wrap gap-x-4"
+        >
+          {/* Het hele label is het raakvlak, niet alleen het vinkje: met een
+              duim mik je op de regel. */}
+          <label className="flex items-center gap-2 py-1 text-xs text-text-muted pointer-coarse:min-h-11 pointer-coarse:py-0">
             <input
               type="checkbox"
               checked={day.startAtStay}
               onChange={(event) =>
                 userId && void saveDay(userId, { ...day, startAtStay: event.target.checked })
               }
+              className="size-4"
             />
-            {`Vertrek vanaf ${verblijf.name}`}
+            Vertrek van verblijf
           </label>
-          <label className="flex items-center gap-2 text-xs text-text-muted">
+          <label className="flex items-center gap-2 py-1 text-xs text-text-muted pointer-coarse:min-h-11 pointer-coarse:py-0">
             <input
               type="checkbox"
               checked={day.endAtStay}
               onChange={(event) =>
                 userId && void saveDay(userId, { ...day, endAtStay: event.target.checked })
               }
+              className="size-4"
             />
-            {`Eindig bij ${verblijf.name}`}
+            Eindig bij verblijf
           </label>
         </div>
       )}
@@ -296,6 +309,10 @@ function SortableActivity({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: activity.id });
 
+  // Verwijderen is niet terug te draaien en de knop staat vlak naast de greep
+  // waarmee je sleept; met een duim scheelt dat weinig.
+  const [vraagtVerwijderen, setVraagtVerwijderen] = useState(false);
+
   return (
     <li
       ref={setNodeRef}
@@ -324,7 +341,9 @@ function SortableActivity({
           {...attributes}
           {...listeners}
           aria-label={`${activity.title} verslepen`}
-          className={`flex size-6 shrink-0 cursor-grab items-center justify-center rounded-full text-xs font-semibold active:cursor-grabbing ${
+          // Het bolletje blijft klein — het is ook het nummer op de kaart —
+          // maar krijgt op een aanraakscherm 44px raakvlak eromheen.
+          className={`relative flex size-6 shrink-0 cursor-grab items-center justify-center rounded-full text-xs font-semibold active:cursor-grabbing pointer-coarse:before:absolute pointer-coarse:before:-inset-2.5 ${
             number === null
               ? "border border-border-strong text-text-subtle"
               : "bg-primary text-on-primary"
@@ -341,7 +360,7 @@ function SortableActivity({
             setMobileTab("dagdeel");
           }}
           aria-current={selectedActivityId === activity.id ? "true" : undefined}
-          className="flex min-w-0 flex-1 flex-col rounded-sm text-left"
+          className="flex min-w-0 flex-1 flex-col justify-center rounded-sm text-left pointer-coarse:min-h-11"
         >
           <span className="flex items-baseline gap-2">
             <span className="shrink-0 font-mono text-xs text-text-muted">
@@ -364,13 +383,26 @@ function SortableActivity({
 
         <button
           type="button"
-          onClick={() => user && deleteActivity(user.id, activity.id)}
+          onClick={() => setVraagtVerwijderen(true)}
           aria-label={`${activity.title} verwijderen`}
-          className="rounded-sm px-1.5 text-sm text-text-subtle hover:text-danger"
+          className="relative flex shrink-0 items-center rounded-sm px-1 text-text-subtle hover:text-danger pointer-coarse:before:absolute pointer-coarse:before:-inset-3"
         >
-          ×
+          <TrashIcon className="size-3.5" />
         </button>
       </div>
+
+      {vraagtVerwijderen && (
+        <ConfirmDialog
+          title="Dagdeel verwijderen?"
+          description={`${activity.title} verdwijnt uit deze dag, met de notitie en de plek op de kaart. Dit is niet terug te draaien.`}
+          confirmLabel="Verwijderen"
+          onCancel={() => setVraagtVerwijderen(false)}
+          onConfirm={() => {
+            setVraagtVerwijderen(false);
+            if (user) void deleteActivity(user.id, activity.id);
+          }}
+        />
+      )}
     </li>
   );
 }
@@ -404,21 +436,21 @@ function ActivityForm({ dayId, userId }: { dayId: string; userId?: string }) {
           onChange={(event) => setTime(event.target.value)}
           placeholder="09:00 - 11:00"
           aria-label="Tijd"
-          className="w-32 shrink-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 font-mono text-sm placeholder:font-sans placeholder:text-text-subtle"
+          className="w-32 shrink-0 rounded-md border border-border-strong bg-surface px-2 py-1.5 font-mono text-sm placeholder:font-sans placeholder:text-text-subtle pointer-coarse:min-h-11"
         />
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Wandelen"
           aria-label="Dagdeel"
-          className="flex-1 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm placeholder:text-text-subtle"
+          className="flex-1 rounded-md border border-border-strong bg-surface px-2 py-1.5 text-sm placeholder:text-text-subtle pointer-coarse:min-h-11"
         />
       </div>
 
       <button
         type="submit"
         disabled={definitieveTitel.length === 0}
-        className="self-start rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+        className="self-start rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:min-h-11 pointer-coarse:px-4"
       >
         Dagdeel toevoegen
       </button>

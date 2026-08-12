@@ -44,14 +44,14 @@ export function ConfirmDialog({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md border border-border-strong px-3 py-1.5 text-sm font-medium hover:bg-surface-sunken"
+          className="rounded-md border border-border-strong px-3 py-1.5 text-sm font-medium hover:bg-surface-sunken pointer-coarse:min-h-11"
         >
           Annuleren
         </button>
         <button
           type="button"
           onClick={onConfirm}
-          className="rounded-md bg-danger px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+          className="rounded-md bg-danger px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 pointer-coarse:min-h-11"
         >
           {confirmLabel}
         </button>
