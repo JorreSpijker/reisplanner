@@ -1,4 +1,4 @@
-import { datesBetween } from "@/lib/dates";
+import { datesBetween, shiftDate } from "@/lib/dates";
 import type {
   Activity,
   Day,
@@ -219,6 +219,39 @@ export function reorderDays(data: TripData, dayIds: string[]): TripData {
     .sort((a, b) => a.date.localeCompare(b.date));
 
   return { ...data, days };
+}
+
+/**
+ * Haalt één dag uit de reis. De reis wordt daarmee een dag korter: de datums
+ * liggen aaneengesloten tussen begin en eind, dus er kan geen gat blijven
+ * staan. Gaat het om de eerste dag, dan begint de reis een dag later en blijft
+ * de rest op zijn datum; anders schuift alles na de verwijderde dag een dag
+ * naar voren en eindigt de reis een dag eerder.
+ */
+export function removeDay(data: TripData, dayId: string): TripData {
+  const levend = data.days
+    .filter((day) => !day.deletedAt)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const index = levend.findIndex((day) => day.id === dayId);
+  // Een reis zonder dagen bestaat niet; de laatste dag blijft staan.
+  if (index === -1 || levend.length <= 1) return data;
+
+  if (index === 0) {
+    return applyTripPatch(data, {
+      id: data.trip.id,
+      startDate: shiftDate(data.trip.startDate, 1),
+    });
+  }
+
+  // De dag naar achteren schuiven en de reis daarna inkorten: zo valt hij eraf
+  // en schuiven de dagen erna met hun planning een datum op.
+  const rest = levend.filter((day) => day.id !== dayId).map((day) => day.id);
+
+  return applyTripPatch(reorderDays(data, [...rest, dayId]), {
+    id: data.trip.id,
+    endDate: shiftDate(data.trip.endDate, -1),
+  });
 }
 
 export function upsertFavorite(

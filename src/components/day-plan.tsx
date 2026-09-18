@@ -25,6 +25,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth/session";
+import { formatDayLabel } from "@/lib/dates";
 import { formatDistance, formatDuration, type RouteLeg } from "@/lib/route";
 import {
   useActiveDayPlaces,
@@ -115,8 +116,9 @@ export function DayPlan({ day }: { day: Day }) {
       <section className="flex flex-1 flex-col gap-6">
         <Planning day={day} userId={user?.id} />
 
-        <div className="flex flex-col">
+        <div className="flex flex-col items-start gap-2">
           <MoveActivities day={day} />
+          <DeleteDay day={day} />
         </div>
 
         {/* Bijzaken: dicht tenzij je ze nodig hebt, en onderaan de kolom zodat
@@ -473,4 +475,54 @@ function DayNote({ day }: { day: Day }) {
   }, [html, day, user, saveDay]);
 
   return <RichText value={day.notes} onChange={setHtml} />;
+}
+
+/**
+ * Haalt deze dag uit de reis. De reis wordt daarmee een dag korter: de dagen
+ * erna schuiven een datum op met hun planning erbij. Staat er nog maar één dag,
+ * dan is er niets te verwijderen — een reis zonder dagen bestaat niet.
+ */
+function DeleteDay({ day }: { day: Day }) {
+  const { user } = useSession();
+  const days = useTripStore((state) => state.data?.days) ?? [];
+  const deleteDay = useTripStore((state) => state.deleteDay);
+  const activities = useDayActivities(day.id);
+  const [vraagtVerwijderen, setVraagtVerwijderen] = useState(false);
+
+  if (days.length <= 1) return null;
+
+  const inhoud = [
+    activities.length > 0
+      ? `${activities.length} ${activities.length === 1 ? "dagdeel" : "dagdelen"}`
+      : null,
+    day.notes ? "de notitie" : null,
+  ].filter(Boolean);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setVraagtVerwijderen(true)}
+        className="flex items-center gap-2 rounded-md border border-border-strong px-3 py-1.5 text-sm text-text-muted hover:text-danger pointer-coarse:min-h-11"
+      >
+        <TrashIcon className="size-3.5" />
+        Dag verwijderen
+      </button>
+
+      {vraagtVerwijderen && (
+        <ConfirmDialog
+          title={`${formatDayLabel(day.date)} verwijderen?`}
+          description={`${
+            inhoud.length > 0 ? `Deze dag verdwijnt met ${inhoud.join(" en ")}. ` : ""
+          }De reis wordt een dag korter; de dagen erna schuiven op. Dit is niet terug te draaien.`}
+          confirmLabel="Verwijderen"
+          onCancel={() => setVraagtVerwijderen(false)}
+          onConfirm={() => {
+            setVraagtVerwijderen(false);
+            if (user) void deleteDay(user.id, day.id);
+          }}
+        />
+      )}
+    </>
+  );
 }

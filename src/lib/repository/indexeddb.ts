@@ -8,6 +8,7 @@ import {
   moveActivities,
   normalize,
   removeActivity,
+  removeDay,
   removeFavorite,
   reorderActivities,
   reorderDays,
@@ -114,6 +115,12 @@ export class IndexedDbRepository implements TripRepository {
     const { data, saved } = upsertDay(await this.require(userId), day);
     await this.write(userId, data);
     return saved;
+  }
+
+  async deleteDay(userId: string, dayId: string): Promise<TripData> {
+    const data = removeDay(await this.require(userId), dayId);
+    await this.write(userId, data);
+    return withoutDeleted(data);
   }
 
   async reorderDays(userId: string, dayIds: string[]): Promise<TripData> {

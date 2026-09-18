@@ -69,6 +69,12 @@ type TripState = {
    * De datums blijven van de reis, de dagen schuiven er met hun planning langs.
    */
   reorderDays: (userId: string, dayIds: string[]) => Promise<void>;
+  /**
+   * Haalt een dag uit de reis; de reis wordt een dag korter. De laatste dag
+   * blijft staan, want een reis zonder dagen bestaat niet.
+   */
+  deleteDay: (userId: string, dayId: string) => Promise<void>;
+
   setHoveredActivity: (activityId: string | null) => void;
   setMapPick: (pick: MapPick | null) => void;
   setSelectedActivity: (activityId: string | null) => void;
@@ -228,6 +234,24 @@ export const useTripStore = create<TripState>((set, get) => ({
       data,
       activeDayId: data.days.find((day) => day.date === datum)?.id ?? get().activeDayId,
       mapPick: null,
+    });
+  },
+
+  deleteDay: async (userId, dayId) => {
+    const vorige = get().data?.days ?? [];
+    const index = vorige.findIndex((day) => day.id === dayId);
+    const data = await repository.deleteDay(userId, dayId);
+
+    // Stond je op de verwijderde dag, dan blijf je op dezelfde plek in de reis
+    // staan: die datum is nu van de dag die erachter stond.
+    const opvolger = data.days[Math.min(index, data.days.length - 1)];
+
+    set({
+      data,
+      activeDayId:
+        get().activeDayId === dayId ? (opvolger?.id ?? null) : get().activeDayId,
+      mapPick: null,
+      selectedActivityId: null,
     });
   },
 

@@ -29,6 +29,12 @@ export interface TripRepository {
   saveDay(userId: string, day: Day): Promise<Day>;
 
   /**
+   * Haalt één dag uit de reis; de reis wordt daarmee een dag korter en de dagen
+   * erna schuiven een datum op. De laatste dag kan niet weg.
+   */
+  deleteDay(userId: string, dayId: string): Promise<TripData>;
+
+  /**
    * Zet de dagen in een andere volgorde; `dayIds` staat in de nieuwe volgorde.
    * De datums van de reis blijven staan, de dagen schuiven erlangs.
    */
